@@ -1,0 +1,9 @@
+ta: {
+    "Main": "முக்கியம்", "Registry": "பதிவு", "Tools": "கருவிகள்", "Intelligence": "நுண்ணறிவு",
+    "Dashboard": "டாஷ்போர்டு", "Map Viewer": "செவ்வியல் பார்வையாளர்", "3D Property View": "3D சொத்து காணொளி",
+    "Land Parcels": "நிலத் துணுக்கள்", "Buildings": "கட்டிடங்கள்", "Floors & Units": "தரக்கட்டம் & அலகுகள்",
+    "ULPIN Generator": "ULPIN உருவாக்கி", "Underground Infra": "நிலத்தட்டு அடிப்படைக் கட்டமைப்பு",
+    "Air Rights": "காற்றுரிமைகள்", "AI & ML Analysis": "AI & ML ஆய்வு", "Data Sources": "தரவுக் கொள்முதல்கள்",
+    "Settings": "அமைப்புகள்", "LIVE": "லைவ்", "Survey Master · RTK Network": "விஞ்ஞான மாஸ்டர் · RTK வலையமைப்பு",
+    "Account": "கணக்கு", "Menu": "மெனு", "Notifications": "அறிவிப்புகள்", "Language": "மொழி",
+    "GPS / GNSS ONLINE": "GPS / GNSS ஆன்லைன்", "DEMO DATA": "டெமோ தரவு", "Sign in": "உள்நுழையவும்",

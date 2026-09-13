@@ -1,0 +1,65 @@
+{
+  "_comment": "THIS IS TEST DATA ONLY - NOT REAL LGD DATA",
+  "_disclaimer": "This file contains fabricated data for testing the validation framework only.",
+  "_important": "These codes and names are invented and do NOT represent real administrative units.",
+  "_do_not_use": "Do NOT use this data for ULPIN generation or any real application.",
+  "states": [
+    {
+      "stateCode": "99",
+      "stateName": "Test State Alpha"
+    },
+    {
+      "stateCode": "98",
+      "stateName": "Test State Beta"
+    }
+  ],
+  "districts": [
+    {
+      "districtCode": "901",
+      "districtName": "Test District One",
+      "stateCode": "99"
+    },
+    {
+      "districtCode": "902",
+      "districtName": "Test District Two",
+      "stateCode": "99"
+    },
+    {
+      "districtCode": "801",
+      "districtName": "Test District Three",
+      "stateCode": "98"
+    }
+  ],
+  "subDistricts": [
+    {
+      "subDistrictCode": "9001",
+      "subDistrictName": "Test Tehsil Alpha-1",
+      "subDistrictType": "Tehsil",
+      "districtCode": "901",
+      "stateCode": "99"
+    },
+    {
+      "subDistrictCode": "9002",
+      "subDistrictName": "Test Tehsil Alpha-2",
+      "subDistrictType": "Tehsil",
+      "districtCode": "902",
+      "stateCode": "99"
+    }
+  ],
+  "villages": [
+    {
+      "villageCode": "999901",
+      "villageName": "Test Village One",
+      "subDistrictCode": "9001",
+      "districtCode": "901",
+      "stateCode": "99"
+    },
+    {
+      "villageCode": "999902",
+      "villageName": "Test Village Two",
+      "subDistrictCode": "9001",
+      "districtCode": "901",
+      "stateCode": "99"
+    }
+  ]
+}

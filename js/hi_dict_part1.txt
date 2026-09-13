@@ -1,0 +1,9 @@
+hi: {
+    "Main": "मुख्य", "Registry": "रजिस्ट्री", "Tools": "उपकरण", "Intelligence": "इंटेलिजेंस",
+    "Dashboard": "डैशबोर्ड", "Map Viewer": "मानचित्र दर्शक", "3D Property View": "3D संपत्ति दर्शन",
+    "Land Parcels": "भूमि पार्सल", "Buildings": "भवन", "Floors & Units": "मंजिलें & इकाइयां",
+    "ULPIN Generator": "ULPIN जनरेटर", "Underground Infra": "भूमिगत बुनियादी ढांचा",
+    "Air Rights": "हवाई अधिकार", "AI & ML Analysis": "AI & ML विश्लेषण", "Data Sources": "डेटा स्रोत",
+    "Settings": "सेटिंग्स", "LIVE": "लाइव", "Survey Master · RTK Network": "सर्वे मास्टर · RTK नेटवर्क",
+    "Account": "खाता", "Menu": "मेनू", "Notifications": "सूचनाएं", "Language": "भाषा",
+    "GPS / GNSS ONLINE": "GPS / GNSS ऑनलाइन", "DEMO DATA": "डेमो डेटा", "Sign in": "साइन इन करें",

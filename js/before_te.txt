@@ -1,0 +1,25 @@
+/* =====================================================================
+   ULPIN 3D â€” Multilingual Language Selector (ADD-ON MODULE)
+   Isolated i18n support: adds 8 languages (English default) without
+   touching any existing behaviour.
+     en  English   te à°¤à±†à°²à±à°—à±   hi à¤¹à¤¿à¤¨à¥à¤¦à¥€   ta à®¤à®®à®¿à®´à¯
+     kn à²•à²¨à³à²¨à²¡      ml à´®à´²à´¯à´¾à´³à´‚   ur Ø§Ø±Ø¯Ùˆ (RTL)   sa à¤¸à¤‚à¤¸à¥à¤•à¥ƒà¤¤à¤®à¥
+   How it works:
+   - Exact-match dictionary of English UI strings -> translation.
+   - Walks text nodes (TreeWalker) + placeholder/title/aria-label attrs.
+   - MutationObserver keeps JS-rendered content translated too.
+   - Selection persisted in localStorage ("ulpin3d.lang").
+   - Urdu applies document-level RTL; map/3D/chart areas stay LTR.
+   Technical identifiers, ULPIN values, owner names and numeric data
+   are intentionally NOT translated.
+   ===================================================================== */
+"use strict";
+
+(function () {
+
+  var STORE_KEY = "ulpin3d.lang";
+
+  /* ---------------- supported languages ---------------- */
+  var LANGS = {
+    en: { name: "English",    dir: "ltr" },
+  

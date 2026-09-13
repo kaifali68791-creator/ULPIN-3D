@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ULPIN 3D — Vertical Property Mapping &amp; ULPIN Generation</title>
+<meta name="description" content="3D ULPIN Generation and Vertical Property Mapping System." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1b2e'/%3E%3Cpath d='M16 5 6 10.5v11L16 27l10-5.5v-11z' fill='%232563eb'/%3E%3Cpath d='M16 10.2 10.6 13v5.4l5.4 3 5.4-3V13z' fill='%230ea5e9'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css?v=5" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+</head>
+<body>
+
+<!-- ===================== WELCOME / ROLE SELECTION (STEP 1) ===================== -->
+<div class="welcome" id="welcome-screen">
+  <div class="wl-glow wl-glow-1" aria-hidden="true"></div>
+  <div class="wl-glow wl-glow-2" aria-hidden="true"></div>
+  <div class="wl-inner">
+    <div class="wl-nav">
+      <div class="wl-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M16 4 5 10v12l11 6 11-6V10z" fill="#2563eb"/><path d="M16 9.5 10 13v6l6 3.5 6-3.5V13z" fill="#0ea5e9"/><path d="M16 4 5 10l11 6 11-6z" fill="#93c5fd" opacity=".7"/></svg>
+        </div>
+        <div class="wl-brand-txt"><strong>ULPIN<span>3D</span></strong><em>Vertical Property Mapping</em></div>
+      </div>
+      <div class="wl-chips">
+        <span class="chip wl-chip"><span class="dot teal"></span>GPS / GNSS ONLINE</span>
+        <span class="chip wl-chip"><span class="dot amber"></span>PLATFORM DATA</span>
+      </div>
+    </div>
+
+    <header class="wl-head">
+      <span class="wl-eyebrow">Smart India Hackathon&nbsp;·&nbsp;Digital India Land Records</span>
+      <h1>3D ULPIN &amp; Vertical Property Mapping System</h1>
+      <p class="wl-sub">Digital 3D Cadastral Platform for Smart Land &amp; Property Management</p>
+      <p class="wl-desc">A next-generation platform for managing surface parcels, buildings, floors, apartments, vertical ownership and spatial property information.</p>
+    </header>
+
+    <div class="wl-role-label">
+      <span class="pulse"></span> Please select your role to continue
+    </div>
+
+    <div class="role-grid" id="role-grid">
+      <!-- role cards injected by app.js -->
+    </div>
+
+                            <footer class="wl-foot">
+      <button class="btn wl-skip" id="btn-skip-welcome">Skip to platform <span class="ni-ico" data-i="arrow"></span></button>
+      <span class="wl-foot-note">Version 1.0 &nbsp;·&nbsp; Sign-in and guest access available</span>
+      <span class="wl-foot-note" style="font-size:10.5px">Developed by Kaif (member of team CYBERLEEKS) · <a class="lf-forgot" href="#" id="btn-open-team">Team CYBERLEEKS</a></span>
+    </footer>
+  </div>
+</div>
+
+<!-- ===================== LOGIN MODAL ===================== -->
+<div class="login-overlay" id="login-overlay" aria-hidden="true">
+  <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <button type="button" class="login-close" id="btn-close-login" aria-label="Close sign in" onclick="closeLogin()">&times;</button>
+    <div class="login-head">
+      <div class="login-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none"><path d="M16 4 5 10v12l11 6 11-6V10z" fill="#2563eb"/><path d="M16 9.5 10 13v6l6 3.5 6-3.5V13z" fill="#0ea5e9"/><path d="M16 4 5 10l11 6 11-6z" fill="#93c5fd" opacity=".7"/></svg>
+      </div>
+      <h2 id="login-title">Sign in to ULPIN 3D</h2>
+      <p class="login-sub">Vertical Property Mapping &amp; ULPIN Generation Platform</p>
+    </div>
+    <div class="login-role-note" id="login-role-note" hidden>
+      <span class="lrn-dot" aria-hidden="true"></span>
+      <span id="login-role-note-text"></span>
+    </div>
+    <form class="login-form" id="login-form" autocomplete="off" onsubmit="doLogin(event)">
+      <label class="lf-row">
+        <span class="lf-label">Email or username</span>
+        <span class="lf-wrap"><span class="lf-ico ni-ico" data-i="users"></span>
+        <input class="lf-input" id="login-email" type="text" placeholder="demo@ulpin.gov.in" value="demo@ulpin.gov.in" required /></span>
+      </label>
+      <label class="lf-row">
+        <span class="lf-label">Password</span>
+        <span class="lf-wrap"><span class="lf-ico ni-ico" data-i="shield"></span>
+        <input class="lf-input" id="login-pass" type="password" placeholder="Enter your password" value="demo123" required /></span>
+      </label>
+      <div class="lf-bar">
+        <label class="lf-remember"><input type="checkbox" id="login-remember" checked /> Remember me</label>
+        <a class="lf-forgot" href="#" id="login-forgot">Forgot password?</a>
+      </div>
+      <button class="btn btn-primary login-submit" id="btn-do-login" type="submit"><span class="ni-ico" data-i="arrow"></span>Sign in to dashboard</button>
+      <p class="login-hint">Sign-in details are pre-filled — just press <b>Sign in</b>.</p>
+    </form>
+    <button type="button" class="btn btn-ghost login-submit" id="btn-google-signin" style="margin-top:10px">
+      <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.5 6.1 29.5 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.7l6.3 5.2C41.3 35.3 44 30 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>
+      <span>Continue with Google</span>
+    </button>
+    <p class="login-signup">Don't have an account? <a href="#" id="btn-google-signup">Sign up</a></p>
+  </div>
+</div>
+
+<!-- ===================== TEAM CYBERLEEKS MODAL ===================== -->
+<div class="login-overlay" id="team-overlay" aria-hidden="true">
+  <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="team-title">
+    <button type="button" class="login-close" aria-label="Close team details" onclick="closeTeam()">&times;</button>
+    <div class="login-head">
+      <h2 id="team-title">TEAM CYBERLEEKS</h2>
+    </div>
+    <ol class="team-list">
+      <li>Kaif ali — Web Developer</li>
+      <li>G. Devi Rohan Sai — Team Leader &amp; Team Coordinator</li>
+      <li>R. Nikitha — UI/UX &amp; Documentation</li>
+      <li>A. Rudra Teja — Researcher</li>
+      <li>Sk. Siddik Ahamad — Project Support</li>
+      <li>N Mallemkondaiah — Researcher</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ===================== MY PROFILE MODAL (additive) ===================== -->
+<div class="login-overlay" id="profile-overlay" aria-hidden="true">
+  <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+    <button type="button" class="login-close" aria-label="Close profile" onclick="closeProfileModal()">&times;</button>
+    <div class="login-head">
+      <h2 id="profile-title">My Profile</h2>
+      <p class="login-sub">Account details from Supabase Auth</p>
+    </div>
+    <div id="prof-body"><!-- populated from the live Supabase session --></div>
+  </div>
+</div>
+
+<!-- ===================== ACCOUNT SETTINGS MODAL (additive) ===================== -->
+<div class="login-overlay" id="settings-overlay" aria-hidden="true">
+  <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <button type="button" class="login-close" aria-label="Close account settings" onclick="closeSettingsModal()">&times;</button>
+    <div class="login-head">
+      <h2 id="settings-title">Account Settings</h2>
+      <p class="login-sub">Profile, role, authentication &amp; session</p>
+    </div>
+    <div id="settings-body"><!-- populated from the live Supabase session --></div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div class="app">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none"><path d="M16 4 5 10v12l11 6 11-6V10z" fill="#2563eb"/><path d="M16 9.5 10 13v6l6 3.5 6-3.5V13z" fill="#0ea5e9"/><path d="M16 4 5 10l11 6 11-6z" fill="#93c5fd" opacity=".7"/></svg>
+      </div>
+      <div class="brand-text">
+        <strong>ULPIN<span class="dim">3D</span></strong>
+        <span>Vertical Property Mapping</span>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <p class="nav-label">Main</p>
+      <a class="nav-item active" href="#" data-view="dashboard"><span class="ni-ico" data-i="dashboard"></span><span>Dashboard</span></a>
+      <a class="nav-item" href="#" data-view="map"><span class="ni-ico" data-i="map"></span><span>Map Viewer</span><span class="nav-tag">2D</span></a>
+      <a class="nav-item" href="#" data-view="view3d"><span class="ni-ico" data-i="cube"></span><span>3D Property View</span><span class="nav-tag hot">3D</span></a>
+
+      <p class="nav-label">Registry</p>
+      <a class="nav-item" href="#" data-view="parcels"><span class="ni-ico" data-i="layers"></span><span>Land Parcels</span></a>
+      <a class="nav-item" href="#" data-view="buildings"><span class="ni-ico" data-i="building"></span><span>Buildings</span></a>
+      <a class="nav-item" href="#" data-view="units"><span class="ni-ico" data-i="layout"></span><span>Floors &amp; Units</span></a>
+
+      <p class="nav-label">Tools</p>
+      <a class="nav-item" href="#" data-view="ulpin"><span class="ni-ico" data-i="hash"></span><span>ULPIN Generator</span><span class="nav-tag hot">New</span></a>
+      <a class="nav-item" href="#" data-view="underground"><span class="ni-ico" data-i="pipe"></span><span>Underground Infra</span></a>
+      <a class="nav-item" href="#" data-view="air"><span class="ni-ico" data-i="cloud"></span><span>Air Rights</span></a>
+      <a class="nav-item" href="#" data-view="reports"><span class="ni-ico" data-i="doc"></span><span>Report Problem</span></a>
+
+      <p class="nav-label">Intelligence</p>
+      <a class="nav-item" href="#" data-view="ai"><span class="ni-ico" data-i="chip"></span><span>AI &amp; ML Analysis</span></a>
+      <a class="nav-item" href="#" data-view="sources"><span class="ni-ico" data-i="db"></span><span>Data Sources</span></a>
+
+      <p class="nav-label" id="nav-label-admin" style="display:none">Administration</p>
+      <a class="nav-item" href="#" data-view="users" style="display:none"><span class="ni-ico" data-i="users"></span><span>User Management</span></a>
+      <a class="nav-item" href="#" data-view="roles" style="display:none"><span class="ni-ico" data-i="shield"></span><span>Role Management</span></a>
+      <a class="nav-item" href="#" data-view="platform" style="display:none"><span class="ni-ico" data-i="dashboard"></span><span>System Overview</span></a>
+
+      <a class="nav-item bottom" href="#" data-view="settings"><span class="ni-ico" data-i="gear"></span><span>Settings</span></a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="sf-card">
+        <div class="sf-top"><span class="pulse"></span>GNSS / CORS <em>LIVE</em></div>
+        <div class="sf-meta">Base: PUNE–08 · RTK fix 12 sats</div>
+      </div>
+      <div class="side-user">
+        <div class="avatar">RS</div>
+        <div class="su-meta"><strong>Rajesh Surveyor</strong><span id="side-role">Survey Master · RTK Network</span></div>
+        <button class="icon-btn subtle" data-action="toast-acc" title="Account"><span class="ni-ico" data-i="dots"></span></button>
+      </div>
+      <button type="button" class="icon-btn subtle" id="btn-signout" title="Sign out of ULPIN 3D" style="width:100%;height:30px;margin-top:10px;border:1px solid rgba(255,255,255,.07);font-size:11px;font-weight:600">Sign out</button>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Menu" title="Menu"><span class="ni-ico" data-i="menu"></span></button>
+      <div class="titles">
+        <h1 id="view-title">Dashboard</h1>
+        <p id="view-sub">Overview of the sample jurisdiction — <b>Village Shivapur, Haveli Taluka, Pune</b></p>
+      </div>
+      <div class="tb-right">
+        <div class="search">
+          <span class="ni-ico srch-ico" data-i="srch"></span>
+          <input id="search-input" type="search" placeholder="Search parcels, owners, ULPIN…" autocomplete="off" />
+          <kbd>⌘K</kbd>
+        </div>
+        <span class="chip coord-pill" title="Coordinate reference"><span class="ni-ico" data-i="pin"></span>18°32′N 73°51′E · EPSG:4326</span>
+        <button class="btn btn-primary" id="btn-new-record"><span class="ni-ico" data-i="plus"></span><span>New Record</span></button>
+        <button class="icon-btn unread" data-action="toast-bell" aria-label="Notifications" title="Notifications"><span class="ni-ico" data-i="bell"></span></button>
+        <button type="button" class="acc-btn" id="btn-account" title="Account" aria-haspopup="true" aria-expanded="false">
+          <span class="acc-av" id="acc-av">–</span>
+          <span class="acc-name" id="acc-name">Account</span>
+        </button>
+      </div>
+
+      <!-- Account panel (additive) — real Supabase Auth info; opened from the topbar avatar.
+           Content is rendered from the live Supabase session (see js/googleAuth.js). -->
+      <div class="account-panel" id="account-panel" role="dialog" aria-label="Account">
+        <div class="ap-head">
+          <div class="ap-avatar" id="ap-avatar">–</div>
+          <div class="ap-id">
+            <strong id="ap-name">Not signed in</strong>
+            <span id="ap-email"></span>
+          </div>
+        </div>
+        <div class="ap-role">
+          <span class="ap-role-label">Role</span>
+          <span class="ap-role-value" id="ap-role">—</span>
+        </div>
+        <div class="ap-status">
+          <span class="ap-status-label">Status</span>
+          <span class="ap-status-value" id="ap-status">—</span>
+        </div>
+        <div class="ap-status">
+          <span class="ap-status-label">Authentication</span>
+          <span class="ap-status-value" id="ap-auth">—</span>
+        </div>
+        <p class="ap-note" id="ap-note">Sign in to see your account details here.</p>
+        <p class="ap-sec-label">Actions</p>
+        <button type="button" class="btn sm ap-switch" id="btn-my-profile">My Profile</button>
+        <button type="button" class="btn sm ap-switch" id="btn-account-settings" style="margin-top:6px">Account Settings</button>
+        <p class="ap-sec-label">Account</p>
+        <button type="button" class="btn sm ap-switch" id="account-switch">Login with another account</button>
+        <button type="button" class="btn btn-primary sm ap-signout" id="account-signout">Sign out</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- ============ ROLE LANDING (STEP 1 placeholder) ============ -->
+      <section class="view" id="view-role">
+        <div class="role-hero">
+          <div>
+            <span class="eyebrow" style="color:#7dd3fc">Role workspace</span>
+            <h2 id="role-welcome-title">Welcome, Guest</h2>
+            <p class="sub" id="role-welcome-sub">Placeholder workspace for the selected role — features arrive in later steps.</p>
+          </div>
+          <div class="role-hero-icons" id="role-hero-icon" aria-hidden="true"></div>
+        </div>
+        <div class="kpi-grid" id="role-kpis"></div>
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Role quick actions</h3><p class="sub">Simple placeholder cards — mock data only</p></div>
+            <div class="role-hero-actions">
+              <button class="btn btn-ghost sm" id="btn-change-role"><span class="ni-ico" data-i="arrow"></span>Change role</button>
+              <button class="btn btn-primary sm" id="btn-enter-platform"><span class="ni-ico" data-i="dashboard"></span>Open full platform</button>
+            </div>
+          </div>
+          <div class="role-cards" id="role-cards"></div>
+        </div>
+      </section>
+
+      <!-- ============ DASHBOARD ============ -->
+      <section class="view active" id="view-dashboard">
+        <div class="hero">
+          <div>
+            <span class="eyebrow">Smart India Hackathon · Workspace</span>
+            <h2>3D ULPIN Generation &amp; Vertical Property Mapping</h2>
+            <p>One unique identity per land parcel — from 2D cadastral maps to 3D volumetric property units, subsurface utilities and air rights.</p>
+            <div class="hero-actions">
+              <button class="btn btn-primary" data-goto="map"><span class="ni-ico" data-i="map"></span>Open Map Viewer</button>
+              <button class="btn btn-ghost" data-goto="view3d"><span class="ni-ico" data-i="cube"></span>Explore 3D</button>
+            </div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <img src="data:image/svg+xml;utf8,%3Csvg width='440' height='300' viewBox='0 0 440 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%232563eb'/%3E%3Cstop offset='1' stop-color='%230ea5e9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='440' height='300' rx='24' fill='%23f8fafc'/%3E%3Cpath d='M40 260 120 190l70 40 60-70 90 30 70-50' stroke='%23cbd5e1' fill='none' stroke-width='3' stroke-dasharray='6 8'/%3E%3Cpath d='M40 260h360' stroke='%23475569' stroke-width='2'/%3E%3Cpath d='M120 190 190 230l130-8 60-48-54-42-110 8z' fill='url(%23g)' opacity='.2'/%3E%3Cpath d='M120 190l70 40V150l-70-20z' fill='%232563eb'/%3E%3Cpath d='M190 230l130-8-10-72-120 8z' fill='%230ea5e9'/%3E%3Cpath d='M120 190l70 40 60-70-70-40z' fill='%2360a5fa'/%3E%3Cg%3E%3Crect x='250' y='120' width='18' height='90' fill='%23334155'/%3E%3Crect x='280' y='110' width='18' height='100' fill='%23334155'/%3E%3Crect x='310' y='130' width='18' height='80' fill='%23334155'/%3E%3Crect x='218' y='150' width='14' height='60' fill='%23475569' transform='rotate(18 225 180)'/%3E%3C/g%3E%3Crect x='236' y='80' width='8' height='40' fill='%2360a5fa' opacity='.8'/%3E%3Crect x='266' y='70' width='8' height='40' fill='%2360a5fa' opacity='.8'/%3E%3Crect x='296' y='90' width='8' height='40' fill='%2360a5fa' opacity='.8'/%3E%3Cpath d='M120 190l70 40 60-70-70-40z' fill='none' stroke='%232563eb' stroke-width='3'/%3E%3C/svg%3E" alt="" />
+          </div>
+        </div>
+
+        <div class="kpi-grid" id="kpi-grid"></div>
+
+        <div class="grid-2 dashboard-mid">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>ULPIN issuance trend</h3><p class="sub">Mock monthly volumes · sample tehsil</p></div>
+              <span class="chip"><span class="dot teal"></span>+12.4% MoM</span>
+            </div>
+            <div class="chart" id="dashboard-chart"></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Vertical snapshot</h3><p class="sub">Vertex Heights · Rajnagar</p></div>
+              <button class="btn btn-ghost sm" data-goto="view3d">View 3D</button>
+            </div>
+            <div class="mini-stack" id="mini-stack"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Recent activity</h3><p class="sub">Latest mutations &amp; surveys in the workspace</p></div>
+            </div>
+            <div class="timeline" id="activity-timeline"></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Recently mapped parcels</h3><p class="sub">Click a row to locate it on the map</p></div>
+              <button class="btn btn-ghost sm" data-goto="parcels">All parcels</button>
+            </div>
+            <div class="table-wrap">
+              <table class="table compact">
+                <thead><tr><th>Survey No</th><th>Owner</th><th>Use</th><th>Area</th></tr></thead>
+                <tbody id="dash-parcels"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ MAP VIEW ============ -->
+      <section class="view" id="view-map" data-mode="2d">
+        <div class="card map-shell">
+          <div class="card-head">
+            <div><h3>Cadastral map — sample village</h3><p class="sub">Interactive map · 2D OpenStreetMap &amp; 3D property view</p></div>
+            <div class="head-tools">
+              <div class="seg" id="map-mode">
+                <button class="seg-btn active" data-mode="2d">2D Map</button>
+                <button class="seg-btn" data-mode="3d">3D Property View</button>
+              </div>
+              <div class="seg" id="map-layers">
+                <button class="seg-btn active" data-layer="parcels">Parcels</button>
+                <button class="seg-btn" data-layer="underground">Underground</button>
+              </div>
+            </div>
+          </div>
+          <div class="map-layout">
+            <div class="map-stage leaflet-stage">
+              <div id="map" class="leaflet-map" aria-label="Interactive OpenStreetMap map"></div>
+              <div id="three-stage" aria-label="3D property scene">
+                <div id="three-labels"></div>
+              </div>
+              <div class="map-overlay-top">
+                <div class="map-search-box">
+                  <span class="ni-ico" data-i="srch"></span>
+                  <input id="map-search" type="search" placeholder="Search location..." autocomplete="off" />
+                </div>
+                <div class="map-live"><span class="dot teal"></span>Live Map · OpenStreetMap</div>
+              </div>
+              <div class="map-layers-panel" id="map-layers-panel">
+                <strong>Layers</strong>
+                <label><input type="checkbox" id="layer-properties" checked /> Properties</label>
+                <label><input type="checkbox" id="layer-parcels" checked /> Parcels</label>
+                <label><input type="checkbox" id="layer-buildings" checked /> Buildings</label>
+                <label><input type="checkbox" id="layer-underground" /> Underground Infrastructure</label>
+                <label><input type="checkbox" id="layer-survey" /> Survey Data</label>
+                <em>Buildings / underground / survey are Phase 2 layers</em>
+              </div>
+              <div class="map-legend">
+                <span><i class="lg residential"></i>Residential</span>
+                <span><i class="lg agricultural"></i>Agricultural</span>
+                <span><i class="lg commercial"></i>Commercial</span>
+                <span><i class="lg institutional"></i>Institutional</span>
+              </div>
+            </div>
+            <aside class="map-side" id="parcel-detail">
+              <div class="pd-empty">
+                <div class="pd-ico"><span class="ni-ico" data-i="pin"></span></div>
+                <p>Select a parcel to inspect its details and generated ULPIN.</p>
+              </div>
+            </aside>
+            <aside class="map-side" id="prop3d-panel">
+              <div class="pd-empty" id="pp-empty">
+                <div class="pd-ico"><span class="ni-ico" data-i="cube"></span></div>
+                <p>Select a building to view property information.</p>
+              </div>
+              <div id="pp-body" hidden></div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 3D PROPERTY VIEW ============ -->
+      <section class="view" id="view-view3d">
+        <div class="card map-shell">
+          <div class="card-head">
+            <div><h3>3D volumetric property model</h3><p class="sub">Interactive 3D building · floors as stacked property volumes · drag to orbit · click a floor</p></div>
+            <select class="select" id="building-select-3d" title="Switch building"></select>
+          </div>
+          <div class="map-layout">
+            <div class="map-stage stage3d">
+              <div id="stage3d-gl" aria-label="Interactive 3D building model">
+                <div id="stage3d-labels"></div>
+              </div>
+              <div class="iso-title" id="iso-title"></div>
+              <div class="map-legend">
+                <span><i class="lg t-residential"></i>Residential</span>
+                <span><i class="lg t-retail"></i>Retail</span>
+                <span><i class="lg t-parking"></i>Parking</span>
+                <span><i class="lg t-selected"></i>Selected</span>
+              </div>
+            </div>
+            <aside class="map-side">
+              <div class="map-side-inner">
+                <div class="card-head">
+                  <div><h3 id="b3d-name">—</h3><p class="sub" id="b3d-meta">—</p></div>
+                </div>
+                <div class="floor-list" id="floors-panel"></div>
+                <div class="units-note" id="units-note"></div>
+                <div class="table-wrap">
+                  <table class="table compact" id="units-table-3d">
+                    <thead><tr><th>Unit</th><th>Type</th><th>Area</th><th>Status</th></tr></thead>
+                    <tbody id="units-body-3d"></tbody>
+                  </table>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LAND PARCELS ============ -->
+      <section class="view" id="view-parcels">
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Land parcel registry</h3><p class="sub">Mock RoR data merged with geo-coordinates · click a row to locate</p></div>
+            <button class="btn btn-primary sm" id="btn-bulk-ulpin"><span class="ni-ico" data-i="hash"></span>Generate missing ULPINs</button>
+          </div>
+          <div class="toolbar">
+            <div class="search grow">
+              <span class="ni-ico srch-ico" data-i="srch"></span>
+              <input id="parcel-search" type="search" placeholder="Search survey no, owner or ULPIN…" autocomplete="off" />
+            </div>
+            <select class="select" id="parcel-use-filter">
+              <option value="">All land uses</option>
+              <option>Residential</option>
+              <option>Agricultural</option>
+              <option>Commercial</option>
+              <option>Institutional</option>
+            </select>
+            <select class="select" id="parcel-status-filter">
+              <option value="">All statuses</option>
+              <option>Titled</option>
+              <option>Pending survey</option>
+              <option>Disputed</option>
+            </select>
+          </div>
+          <div class="inline-detail" id="parcel-inline" hidden></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Survey No</th><th>Owner</th><th>Land use</th><th>Area (sq m)</th>
+                  <th>Coordinates</th><th>ULPIN</th><th>Status</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="parcels-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pg-bar"><span id="parcels-count"></span><span class="pg-dots">Page 1 of 1</span></div>
+        </div>
+      </section>
+
+      <!-- ============ BUILDINGS ============ -->
+      <section class="view" id="view-buildings">
+        <div class="card-head between">
+          <div><h3>Building register</h3><p class="sub">Vertical property entities mapped to their base parcels</p></div>
+        </div>
+        <div class="buildings-grid" id="buildings-grid"></div>
+      </section>
+
+      <!-- ============ FLOORS & UNITS ============ -->
+      <section class="view" id="view-units">
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Floors &amp; units ledger</h3><p class="sub">Every flat / commercial unit carries a volumetric ULPIN derived from its parent parcel</p></div>
+            <select class="select" id="units-building-select" title="Choose building"></select>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Unit ID</th><th>Building</th><th>Floor</th><th>Type</th>
+                  <th>Area (sq ft)</th><th>Status</th><th>Volumetric ULPIN</th>
+                </tr>
+              </thead>
+              <tbody id="units-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pg-bar"><span id="units-count"></span><span class="pg-dots">Sample subset · full ledger in Phase 2</span></div>
+        </div>
+      </section>
+
+      <!-- ============ ULPIN GENERATOR ============ -->
+      <section class="view" id="view-ulpin">
+        <div class="ulpin-grid">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Generate a ULPIN</h3><p class="sub">Administrative codes + parcel coordinates</p></div>
+            </div>
+            <div class="form" id="ulpin-form">
+              <div class="form-row">
+                <div class="field"><label for="ulp-state">State</label><select id="ulp-state" class="select"></select></div>
+                <div class="field"><label for="ulp-district">District</label><select id="ulp-district" class="select"></select></div>
+              </div>
+              <div class="form-row">
+                <div class="field"><label for="ulp-tehsil">Sub-district / Tehsil</label><select id="ulp-tehsil" class="select"></select></div>
+                <div class="field"><label for="ulp-village">Village</label><select id="ulp-village" class="select"></select></div>
+              </div>
+              <div class="field"><label for="ulp-parcel">Land parcel (survey number)</label><select id="ulp-parcel" class="select"></select></div>
+              <button class="btn btn-primary wide" id="btn-generate-ulpin" type="button"><span class="ni-ico" data-i="hash"></span>Generate Surface ULPIN</button>
+            </div>
+            <div id="ulp-parcel-status" class="pd-status"></div>
+            <div class="note">
+              <strong>What is ULPIN?</strong> A 26-character unique land parcel ID (state<sup>2</sup>·district<sup>2</sup>·tehsil<sup>2</sup>·village<sup>2</sup>·parcel<sup>4</sup>·geo<sup>14</sup>). This is a <b>simulated format</b> for demonstration — the official scheme is issued by state revenue departments.
+            </div>
+            <div class="form" style="margin-top:18px;border-top:1px dashed var(--line);padding-top:16px">
+              <div class="card-head" style="margin-bottom:10px"><div><h4 style="font-size:14px">Vertical Property ULPIN</h4><p class="sub">Extend the surface identity to a building, floor or unit</p></div></div>
+              <div class="form-row">
+                <div class="field"><label for="ulp-building">Building</label><select id="ulp-building" class="select"></select></div>
+                <div class="field"><label for="ulp-floor">Floor</label><select id="ulp-floor" class="select"></select></div>
+              </div>
+              <div class="field"><label for="ulp-unit">Unit</label><select id="ulp-unit" class="select"></select></div>
+              <button class="btn btn-primary wide" id="btn-generate-vertical-ulpin" type="button" style="margin-top:10px"><span class="ni-ico" data-i="cube"></span>Generate Vertical ULPIN</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Issued identity</h3><p class="sub">Result of the last generation</p></div>
+            </div>
+            <div id="ulpin-result">
+              <div class="pd-empty">
+                <div class="pd-ico"><span class="ni-ico" data-i="hash"></span></div>
+                <p>Choose a parcel on the left and press <b>Generate ULPIN</b>.</p>
+              </div>
+            </div>
+            <div id="ulp-status-chip" class="ulpin-actions" style="justify-content:flex-start;margin-top:6px"></div>
+            <div class="validator">
+              <h4>Verify an existing ULPIN</h4>
+              <div class="vl-row">
+                <input class="input" id="ulpin-validate-input" placeholder="Paste a 26-character ULPIN…" maxlength="26" autocomplete="off" spellcheck="false" />
+                <button class="btn btn-ghost" id="btn-validate">Verify</button>
+              </div>
+              <div id="validate-outcome"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div><h3>ULPIN Scanner</h3><p class="sub">Read a QR issued by the generator — camera or image upload</p></div>
+            </div>
+            <div class="note">
+              <button class="btn btn-primary wide" id="btn-open-scanner" type="button" style="margin-top:2px"><span class="ni-ico" data-i="scan"></span>Open ULPIN Scanner</button>
+              <p style="margin-top:10px;font-size:11.5px;color:var(--muted);line-height:1.5">Scans QR codes produced by the generator above. Prototype only — not government-issued.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div><h3>How it works</h3><p class="sub">Official pipeline planned for later phases</p></div>
+          </div>
+          <div class="steps">
+            <div class="step"><span class="step-n">1</span><div><strong>RoR + map merge</strong><p>Records of Rights are matched to cadastral map polygons.</p></div></div>
+            <div class="step"><span class="step-n">2</span><div><strong>Geo-coordinate encoding</strong><p>Parcel corner coordinates are encoded into the last 14 characters.</p></div></div>
+            <div class="step"><span class="step-n">3</span><div><strong>Stamping &amp; 3D linking</strong><p>The ULPIN anchors all vertical volumes — floors, flats, utilities, air space.</p></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ REPORT PROBLEM (additive prototype) ============ -->
+      <section class="view" id="view-reports">
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Report Problem</h3><p class="sub">Prototype citizen complaint &mdash; saved only in this browser</p></div>
+            <span class="chip"><span class="dot amber"></span>Prototype</span>
+          </div>
+          <div style="background:rgba(255,183,0,.08);border:1px solid rgba(255,183,0,.3);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;line-height:1.55">
+            <strong style="color:var(--amber)">Prototype Submission &mdash; not connected to a government grievance system.</strong><br>
+            Reports are stored locally in this browser (localStorage). No file is uploaded to any server, external or government system.
+          </div>
+          <div class="form" id="report-form">
+            <div class="field">
+              <label for="report-category">Problem Category <em>*</em></label>
+              <select id="report-category" class="select">
+                <option value="">Select category&hellip;</option>
+                <option>Land Record Issue</option>
+                <option>Property Boundary Issue</option>
+                <option>ULPIN Issue</option>
+                <option>Building/Floor Issue</option>
+                <option>Map/Location Issue</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="report-ulpin">ULPIN / Property ID <em>*</em></label>
+              <input id="report-ulpin" class="input" placeholder="Paste the ULPIN or property ID" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label for="report-desc">Description <em>*</em></label>
+              <textarea id="report-desc" class="input" rows="4" placeholder="Describe the problem&hellip;" style="resize:vertical;min-height:96px"></textarea>
+            </div>
+            <div class="field">
+              <label for="report-location">Location / coordinates <span style="color:var(--muted)">(optional)</span></label>
+              <input id="report-location" class="input" placeholder="e.g. 18.5074, 73.8077 or locality name" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="report-file">Photo / document attachment <span style="color:var(--muted)">(optional)</span></label>
+              <input type="file" id="report-file" class="input" accept="image/*,.pdf,.txt,.doc,.docx" />
+              <div id="report-file-info" style="margin-top:6px;font-size:11.5px;color:var(--muted)"></div>
+            </div>
+            <div id="report-outcome" style="margin-bottom:12px"></div>
+            <button class="btn btn-primary wide" id="btn-submit-report" type="button"><span class="ni-ico" data-i="check"></span>Submit Report</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div><h3>My Reports</h3><p class="sub">Prototype submissions stored in this browser</p></div>
+            <span class="chip">Local</span>
+          </div>
+          <div id="report-history"></div>
+        </div>
+      </section>
+
+      <!-- ============ UNDERGROUND INFRA ============ -->
+      <section class="view" id="view-underground">
+        <div class="card map-shell">
+          <div class="card-head">
+            <div><h3>Subsurface infrastructure register</h3><p class="sub">Underground utilities tied to their host parcels &amp; exact depths</p></div>
+            <span class="chip"><span class="dot teal"></span>14 assets mapped</span>
+          </div>
+          <div class="map-layout">
+            <div class="map-stage">
+              <svg id="subsurface-svg" viewBox="0 0 760 440" role="img" aria-label="Underground utilities cross-section"></svg>
+              <div class="map-legend">
+                <span><i class="lg u-water"></i>Water</span>
+                <span><i class="lg u-sewer"></i>Sewer</span>
+                <span><i class="lg u-gas"></i>Gas</span>
+                <span><i class="lg u-power"></i>Power</span>
+                <span><i class="lg u-fiber"></i>Fiber</span>
+              </div>
+            </div>
+            <aside class="map-side" id="assets-list"></aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ AIR RIGHTS ============ -->
+      <section class="view" id="view-air">
+        <div class="air-grid">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Air rights &amp; air-space volumes</h3><p class="sub">Legal 3D volumes for towers, FSI utilisation &amp; aerial utilities</p></div>
+              <span class="chip warn"><span class="dot amber"></span>Phase 2 module</span>
+            </div>
+            <div class="air-stage">
+              <svg id="air-svg" viewBox="0 0 520 340" role="img" aria-label="Air space volumes over a building"></svg>
+            </div>
+            <div class="note">
+              <strong>Concept</strong> Each air-space volume is registered as a 3D parcel above a base ULPIN — enabling FSI banking, drone corridors and overhead utility easements.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Registered air parcels</h3><p class="sub">Sample records</p></div>
+            </div>
+            <div class="air-list" id="air-list"></div>
+          </div>
+        </div>
+      </section>
+
+            <!-- ============ AI & ML ============ -->
+      <section class="view" id="view-ai">
+        <div class="card-head between">
+          <div>
+            <h3>AI Cadastral Analysis</h3>
+            <p class="sub">AI-powered validation, property intelligence and 3D cadastral insights</p>
+          </div>
+          <span class="chip ok"><span class="dot teal"></span>Live Analysis</span>
+        </div>
+        
+        <!-- AI Insights Cards -->
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-head">
+            <div><h3>AI Insights</h3><p class="sub">Real-time system metrics</p></div>
+          </div>
+          <div class="ai-analysis-results" id="ai-insights-container">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+        
+        <!-- Analysis Controls -->
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-head">
+            <div><h3>Analysis Control Panel</h3><p class="sub">Select analysis type and run AI validation</p></div>
+          </div>
+          <div class="ai-analysis-toolbar">
+            <select class="ai-analysis-select" id="ai-analysis-type">
+              <option value="parcel">Parcel Analysis</option>
+              <option value="building">Building Analysis</option>
+              <option value="extraction">AI Building Extraction</option>
+              <option value="floorseg">AI Floor Segmentation</option>
+              <option value="vertical">Vertical Parcel Delineation</option>
+              <option value="topology">Topology Validation</option>
+              <option value="ulpin">ULPIN Validation</option>
+              <option value="ownership">Ownership Conflict Detection</option>
+              <option value="infrastructure">Infrastructure Analysis</option>
+              <option value="planning">Infrastructure Planning</option>
+            </select>
+            <button class="btn btn-primary" onclick="runAIAnalysisInPageV2()">
+              <span class="ni-ico">🤖</span>Run AI Analysis
+            </button>
+          </div>
+        </div>
+        
+        <!-- Analysis Results -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Analysis Results</h3>
+              <p class="sub" id="ai-results-subtitle">Select an analysis type and click "Run AI Analysis"</p>
+            </div>
+          </div>
+          <div id="ai-analysis-results" style="padding: 16px;">
+            <div style="text-align: center; padding: 40px; color: var(--muted);">
+              <div style="font-size: 48px; margin-bottom: 16px;">🤖</div>
+              <p>AI analysis results will appear here.</p>
+              <p style="margin-top: 8px; font-size: 12px;">Select an analysis type from the panel above and run the analysis.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ DATA SOURCES ============ -->
+      <section class="view" id="view-sources">
+        <div class="card-head between">
+          <div><h3>Data sources &amp; feeds</h3><p class="sub">Integrations planned for the full system</p></div>
+        </div>
+        <div id="sources-list"></div>
+      </section>
+
+      <!-- ============ SETTINGS ============ -->
+      <section class="view" id="view-settings">
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Settings</h3><p class="sub">Workspace preferences</p></div>
+          </div>
+          <div class="settings-list">
+            <div class="set-row"><div><strong>Coordinate reference system</strong><p>Default: WGS 84 / EPSG:4326 · UTM zones auto</p></div><span class="chip">WGS 84</span></div>
+            <div class="set-row"><div><strong>Map provider</strong><p>Switching to live basemap tiles arrives with the backend</p></div><span class="chip">2D SVG map</span></div>
+            <div class="set-row"><div><strong>3D engine</strong><p>WebGL engine planned for Phase 2 (Three.js / CesiumJS)</p></div><span class="chip">Isometric SVG</span></div>
+            <div class="set-row"><div><strong>GNSS / CORS network</strong><p>Connect to RTK base stations for cm-level survey</p></div><span class="chip">RTK PUNE–08</span></div>
+            <div class="set-row dim"><div><strong>Team access &amp; roles</strong><p>Coming later — role based access for surveyors, ROR officers, citizens</p></div><span class="chip">Phase 2</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ADMIN: USER MANAGEMENT (Admin role only) ============ -->
+      <section class="view" id="view-users">
+        <div class="card">
+          <div class="card-head">
+            <div><h3>User &amp; account directory</h3><p class="sub">Local application data — not connected to an external database</p></div>
+            <span class="chip">Platform data</span>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>User</th><th>Role</th><th>Account email</th><th>Status</th><th>Source</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pg-bar"><span id="users-count"></span><span class="pg-dots">Local directory · backend integration in later phases</span></div>
+        </div>
+      </section>
+
+      <!-- ============ ADMIN: ROLE MANAGEMENT (Admin role only) ============ -->
+      <section class="view" id="view-roles">
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Platform roles</h3><p class="sub">The four platform roles and their access scope</p></div>
+            <span class="chip">Platform data</span>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Role</th><th>Role key</th><th>Account</th><th>Access Scope</th><th>User Management Access</th>
+                </tr>
+              </thead>
+              <tbody id="roles-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Access policy</h3><p class="sub">What each role can reach in the platform navigation</p></div>
+          </div>
+          <div class="settings-list" id="access-policy-list"></div>
+        </div>
+      </section>
+
+      <!-- ============ ADMIN: SYSTEM OVERVIEW (Admin role only) ============ -->
+      <section class="view" id="view-platform">
+        <div class="card-head between">
+          <div><h3>System / platform overview</h3><p class="sub">Platform snapshot — local application data</p></div>
+          <span class="chip ok"><span class="dot teal"></span>Local environment</span>
+        </div>
+        <div class="kpi-grid" id="platform-kpis"></div>
+        <div class="card">
+          <div class="card-head">
+            <div><h3>Platform modules</h3><p class="sub">Status of the existing platform modules</p></div>
+          </div>
+          <div class="settings-list" id="platform-services"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== TOASTS ===================== -->
+<!-- ===================== ULPIN SCANNER MODAL (additive) ===================== -->
+<div class="login-overlay" id="scanner-overlay" aria-hidden="true">
+  <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="scanner-title" style="width:min(520px,100%)">
+    <button type="button" class="login-close" id="btn-close-scanner" aria-label="Close ULPIN scanner">&times;</button>
+    <div class="login-head">
+      <div class="login-mark" aria-hidden="true"><span class="ni-ico" data-i="scan"></span></div>
+      <h3 id="scanner-title" style="font-family:var(--disp);font-size:23px;color:#fff;margin-bottom:6px;text-align:center">ULPIN Scanner</h3>
+      <div class="login-sub">Read a QR issued by the ULPIN Generator — camera or image upload</div>
+    </div>
+    <div>
+      <video id="scanner-video" playsinline muted style="width:100%;border-radius:12px;background:#040b16;border:1px solid rgba(148,163,184,.25);min-height:180px;max-height:320px;object-fit:cover"></video>
+      <div id="scanner-cam-status" class="login-hint" style="margin-top:10px;margin-bottom:0">Camera starts only when you press Start Camera.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;justify-content:center">
+        <button type="button" class="btn btn-primary" id="btn-scanner-start"><span class="ni-ico" data-i="camera"></span>Start Camera</button>
+        <label class="btn btn-ghost" style="cursor:pointer;margin:0;padding:9px 14px">
+          <span class="ni-ico" data-i="cloud"></span>Upload QR Image
+          <input type="file" id="scanner-file" accept="image/*" hidden />
+        </label>
+      </div>
+      <div id="scanner-result" class="pd-status" style="margin-top:14px;text-align:left"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-root" id="toast-root"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/lgd-data.js?v=1"></script>
+<script src="js/demoData.js?v=1"></script>
+<script src="js/geoService.js?v=1"></script>
+<script src="js/scene3d.js?v=1"></script>
+<script src="js/map.js?v=1"></script>
+<script src="js/mapLivePlus.js?v=2"></script>
+<script src="js/mapGooglePlus.js?v=1"></script>
+<script src="js/aiAssistant.js?v=1"></script>
+<script src="js/cadastreEngine.js?v=1"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/app.js?v=9"></script>
+<script src="js/googleAuth.js?v=8"></script>
+<script src="js/i18n.js?v=1"></script>
+
+<!-- ===================== AI ASSISTANT (Floating Widget) ===================== -->
+<div class="ai-assistant-container" id="ai-assistant-container">
+  <button class="ai-btn" id="ai-toggle-btn" title="AI Assistant">
+    <span class="ai-icon">🤖</span>
+  </button>
+  <div class="ai-chat-panel" id="ai-chat-panel">
+    <div class="ai-chat-header">
+      <div>
+        <div class="ai-chat-title">ULPIN AI Assistant</div>
+        <small>Intelligent Cadastral Assistant</small>
+      </div>
+      <div class="ai-chat-actions">
+        <button class="ai-minimize" id="ai-minimize-btn">−</button>
+        <button class="ai-close" id="ai-close-btn">×</button>
+      </div>
+    </div>
+    <div class="ai-chat-messages" id="ai-chat-messages">
+      <div class="ai-message">
+        <div class="ai-message-content">
+          <strong>Welcome to ULPIN AI Assistant</strong>
+          <div style="margin-top: 8px; font-size: 12px; line-height: 1.6;">
+            I can help you analyze properties, check topology, validate ULPINs, and detect potential issues. What would you like to do?
+          </div>
+        </div>
+      </div>
+      <div class="ai-suggested-prompts" id="ai-suggested-prompts">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+    <div class="ai-chat-input">
+      <input type="text" id="ai-input" placeholder="Ask me about properties..." />
+      <button class="ai-send" id="ai-send-btn">Send</button>
+    </div>
+  </div>
+</div> 
+<!-- AI Context Panel (Property Details) -->
+<div class="ai-context-panel" id="ai-context-panel" style="display:none;">
+  <div class="ai-context-header">
+    <span>AI Analysis Context</span>
+    <button class="ai-context-close" id="ai-context-close">×</button>
+  </div>
+  <div class="ai-context-content" id="ai-context-content">
+    <!-- Populated when a property/parcel is selected -->
+  </div>
+</div>
+
+</body>
+</html>

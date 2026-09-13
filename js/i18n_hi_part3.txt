@@ -1,0 +1,2 @@
+"Select an analysis type from the panel above and run the analysis.": "ऊपर दिए गए पैनल से विश्लेषण प्रकार चुनें और विश्लेषण चलाएं।"
+  },
