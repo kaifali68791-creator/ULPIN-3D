@@ -270,15 +270,21 @@ function startGoogleSignIn(opts) {
     }
   }
 
-  /* Redirect back to this exact page. This equals window.location.origin when
-     the site is hosted at a domain root, and also works from sub-folders. */
+  /* OAuth return URL (Task 2): ALWAYS the page that started the login.
+     - Local dev (http://localhost:*) keeps working: redirect = that localhost page.
+     - Production/GitHub Pages: redirect = the deployed page origin + path
+       (e.g. https://kaifali68791-creator.github.io/ULPIN-3D/).
+     Nothing is hardcoded, so localhost can never leak into production and the
+     deployed site can never leak into local dev. This URL must ALSO be listed
+     in Supabase Auth Redirect URLs (see note at the bottom of this file). */
+  var oauthReturnUrl = window.location.origin + window.location.pathname;
   /* selectAccount → prompt=select_account: Google ALWAYS shows its account
      chooser, so the user can pick a different account. The default sign-in
      keeps the previous (working) behaviour. */
   sbClient.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: window.location.origin + window.location.pathname,
+      redirectTo: oauthReturnUrl,
       queryParams: selectAccount ? { prompt: "select_account" } : undefined
     }
   }).then(({ error }) => {
@@ -668,9 +674,17 @@ document.addEventListener("DOMContentLoaded", initGoogleAuth);
 /* --------------------------------------------------------------------
    WHAT REMAINS TO BE CONFIGURED (honest status, no fake behaviour):
    1. Paste SUPABASE_URL and SUPABASE_ANON_KEY at the top of this file.
-   2. Supabase dashboard → Authentication → URL Configuration:
-      add this site's origin (e.g. http://localhost:5500 or your hosting
-      URL) to "Redirect URLs" so Google can return to the website.
+   2. Supabase dashboard → Authentication → URL Configuration (Task 2 fix):
+      BOTH of these exact values must be present in "Redirect URLs"
+      (one line per URL — replace any stale http://localhost:3000 entry):
+        https://kaifali68791-creator.github.io/ULPIN-3D/
+        https://kaifali68791-creator.github.io/ULPIN-3D/index.html
+      Set "Site URL" to:  https://kaifali68791-creator.github.io/ULPIN-3D/
+      Keep a localhost entry ONLY if you still test locally, e.g.
+      http://localhost:5500/ — never as the production value.
+      If this dashboard step is skipped, Supabase/Google will still bounce
+      the login back to localhost:3000 (or show a redirect error) even
+      though the code above now sends the correct deployed return URL.
    3. Google Cloud → OAuth client: the Authorized Redirect URI must be
       https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback
       (this is configured in Supabase, never in this frontend).

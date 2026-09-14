@@ -2785,7 +2785,22 @@ function renderSources() {
 /* ===================== GLOBAL WIRING ===================== */
 function wireAll() {
   $$(".nav-item").forEach((n) => n.addEventListener("click", (e) => { e.preventDefault(); goto(n.dataset.view); }));
-  $("#hamburger").addEventListener("click", () => document.body.classList.toggle("nav-open"));
+  /* Mobile drawer (Task 1, additive): keep the drawer below the live sticky
+     topbar height so the EXISTING #hamburger stays visible + tappable. */
+  const syncDrawerTop = () => {
+    try {
+      const tb = document.querySelector(".topbar");
+      if (tb && window.matchMedia("(max-width:1024px)").matches) {
+        document.documentElement.style.setProperty("--m-top", Math.round(tb.getBoundingClientRect().height) + "px");
+      } else {
+        document.documentElement.style.removeProperty("--m-top");
+      }
+    } catch (e) { /* keep desktop/default offset */ }
+  };
+  window.addEventListener("resize", syncDrawerTop);
+  window.addEventListener("orientationchange", syncDrawerTop);
+  syncDrawerTop();
+  $("#hamburger").addEventListener("click", () => { syncDrawerTop(); document.body.classList.toggle("nav-open"); });
   $("#scrim").addEventListener("click", () => document.body.classList.remove("nav-open"));
 
   document.addEventListener("click", (e) => {

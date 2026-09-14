@@ -635,6 +635,39 @@ body.nav-open .scrim{opacity:1;pointer-events:auto}
   .kpi-grid{grid-template-columns:1fr}
 }
 
+/* ===================== MOBILE DRAWER + MOBILE FIT (ADDITIVE — Task 1) ======
+   Desktop/tablet above 1024px are untouched (see max-width:1024px rules).
+   Below 1024px the EXISTING #sidebar becomes the mobile drawer opened by the
+   EXISTING #hamburger + #scrim (body.nav-open). No nav item/feature touched.
+   The drawer slides in BELOW the sticky topbar, so the EXISTING #hamburger
+   in the topbar always stays visible + tappable while the drawer is open. */
+body.nav-open{overflow:hidden}
+body.nav-open .sidebar{transform:translateX(0)}
+@media (max-width:1024px){
+  .sidebar{top:var(--m-top,68px);height:calc(100dvh - var(--m-top,68px));z-index:1200}
+  body.nav-open .topbar{position:sticky;z-index:1300}
+  body.nav-open .sidebar{
+    transform:none;
+    width:min(300px,84vw);
+    max-width:84vw;
+    z-index:1200;
+    box-shadow:24px 0 60px rgba(2,8,23,.45);
+  }
+  body.nav-open .sidebar .nav{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  body.nav-open .sidebar .nav-item{min-height:46px;padding:12px}
+  body.nav-open #scrim{z-index:1100}
+}
+/* Phone topbar breathing room + no horizontal page scroll (tables still
+   scroll inside their own .table-wrap only). */
+@media (max-width:680px){
+  html,body{overflow-x:hidden}
+  .app,.main,.content,.card,.hero,.topbar{min-width:0;max-width:100%}
+  .topbar{flex-wrap:wrap}
+  .tb-right{flex-wrap:wrap;gap:8px;min-width:0}
+  .content{overflow-x:hidden}
+  img,svg,video,canvas{max-width:100%}
+}
+
 /* ===================== WELCOME / ROLE SELECTION (STEP 1) ===================== */
 .welcome{
   position:fixed;inset:0;z-index:300;overflow-y:auto;
