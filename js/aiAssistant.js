@@ -1,4 +1,4 @@
-/* =====================================================================
+﻿/* =====================================================================
    ULPIN 3D — AI Cadastral Assistant & Analyzer (Demo Mode)
    ===================================================================== */
 "use strict";
@@ -616,7 +616,7 @@ var GK_TOPICS = [
   {
     re: /\bai\b|artificial intelligence/,
     name: "Artificial Intelligence (AI)",
-    text: "AI is the field of making computers perform tasks that usually require human intelligence. IMPORTANT: this assistant is rule-based/demo logic over a fixed dataset \u2014 it is NOT a generative model like ChatGPT or Gemini."
+    text: "AI is the field of making computers perform tasks that usually require human intelligence. IMPORTANT: this assistant is rule-based/demo logic over a fixed dataset \u2014 it now also uses Google Gemini for natural-language questions."
   },
   {
     re: /\bml\b|machine learning/,
@@ -652,13 +652,13 @@ function answerGeneralQuestion(raw) {
 
   /* Friendly quick replies (reusable patterns). */
   if (/^\s*(hi|hi there|hello|hey|hey there|namaste|good (morning|afternoon|evening)|greetings)[!\\.]*\s*$/i.test(q)) {
-    return "Hello! I'm the ULPIN 3D demo assistant \u2014 a rule-based local chatbot (not ChatGPT/Gemini or a real AI model). Ask a cadastral question, e.g. \"Analyze parcel 131/2\", or a general one, e.g. \"What is GIS?\".";
+    return "Hello! I'm the ULPIN 3D AI assistant. I have a built-in cadastral engine for property/parcel analysis and I'm also connected to Google Gemini for natural-language questions. Ask a cadastral question, e.g. \"Analyze parcel 131/2\", or a general one, e.g. \"What is GIS?\".";
   }
   if (/\b(thanks|thank you|thx)\b/.test(q)) {
     return "You're welcome! Happy to help with cadastral or general questions.";
   }
   if (/\b(who are you|what are you)\b/.test(q)) {
-    return "I'm the ULPIN 3D demo assistant: a rule-based local chatbot for cadastral and general questions. I am not ChatGPT, Gemini, or a real generative AI model, and I have no live Internet knowledge source.";
+    return "I'm the ULPIN 3D AI assistant. I combine a local cadastral analysis engine (for the demo dataset) with the Google Gemini AI model for natural-language questions about land parcels, buildings, ULPIN, topology, underground infrastructure, maps, and general topics.";
   }
   if (/\b(what can you do|how can you help|help me|commands)\b/.test(q)) {
     return "I can help with:\n\u2022 Cadastral: 'Analyze parcel 131/2', 'How many floors does B01 have?', 'What is the ULPIN of F4-U03?', 'Are there topology conflicts?', 'Show underground utilities', '3D volume of F4-U03'\n\u2022 General knowledge: 'What is GIS?', 'What is LiDAR?', 'What is the capital of India?'";
@@ -790,6 +790,81 @@ async function runAIAnalysisInPage() {
     if (subtitle) subtitle.textContent = `Analysis complete: ${res.issues.length} issues found`;
   }, 1000);
 }
+
+/* =====================================================================
+   LIVE AI BRIDGE — Google Gemini via Supabase Edge Function (FREE tier)
+   ---------------------------------------------------------------------
+   For questions that the rule-based cadastral engine and the general-
+   knowledge fallback cannot answer, this forwards the query (plus the
+   current demo dataset as context) to the "gemini-chat" Supabase Edge
+   Function, which holds the GEMINI_API_KEY securely and calls the
+   Gemini free-tier API.
+
+   If anything fails (no network, missing key, rate limit) the promise
+   rejects so the caller can fall back to the existing static help text.
+   ===================================================================== */
+
+/* Return the shared Supabase browser client (initialised in googleAuth.js). */
+function getAIClient() {
+  if (typeof window.getSupabaseAIClient === "function") {
+    const c = window.getSupabaseAIClient();
+    if (c) return c;
+  }
+  return null;
+}
+
+/* Build a compact snapshot of the demo dataset to give Gemini context. */
+function buildDemoContext() {
+  const C = (typeof CADASTRE !== "undefined") ? CADASTRE : null;
+  if (!C || !C.DATASET) return {};
+  const ds = C.DATASET;
+  return {
+    parcel: ds.parcel || null,
+    building: ds.building || null,
+    floors: ds.floors || [],
+    units: ds.units || {},
+    underground: ds.underground || [],
+    topology: ds.topology || null,
+    ownershipConflicts: ds.ownershipConflicts || [],
+    infrastructure: ds.infrastructure || null,
+  };
+}
+
+/* Call the Gemini Edge Function. Resolves with an HTML string, or rejects. */
+async function callGeminiAI(query) {
+  const client = getAIClient();
+  if (!client) {
+    throw new Error("Supabase client not available");
+  }
+  const context = buildDemoContext();
+
+  const { data, error } = await client.functions.invoke("gemini-chat", {
+    body: { query, context },
+  });
+
+  if (error) {
+    throw new Error(error.message || "Edge Function error");
+  }
+  if (!data || typeof data.answer !== "string" || !data.answer.trim()) {
+    throw new Error("Empty Gemini response");
+  }
+
+  // Escape HTML and convert newlines so the answer can be set via innerHTML.
+  const escaped = data.answer
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const withBreaks = escaped.replace(/\n/g, "<br>");
+
+  return (
+    "<strong>ULPIN AI Assistant</strong>" +
+    "<div style=\"margin-top:8px;font-size:12px;line-height:1.6;white-space:pre-wrap;\">" +
+    withBreaks +
+    "</div>" +
+    "<div style=\"margin-top:8px;font-size:10px;color:var(--muted);\">Powered by Google Gemini (free tier) · demonstration data</div>"
+  );
+}
+
 
 function renderAIInsights() {
   const container = document.getElementById('ai-insights-container');

@@ -2970,7 +2970,7 @@ function enhanceChatbot() {
   sendBtn.onclick = () => { const query = input.value.trim(); if (query) { input.value = ""; handleCadastreQuery(query); } };
 }
 
-function handleCadastreQuery(query) {
+async function handleCadastreQuery(query) {
   const messagesContainer = document.getElementById("ai-chat-messages");
   if (!messagesContainer) return;
   const userMsg = document.createElement("div");
@@ -2980,6 +2980,7 @@ function handleCadastreQuery(query) {
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
   const q = query.toLowerCase().trim();
   let response = "";
+  let needsAI = false;
   const C = (typeof CADASTRE !== "undefined") ? CADASTRE : null;
   if (!C) { response = "Cadastre engine is not loaded."; }
   else if (q.includes("analyze parcel") || q.includes("131/2")) {
@@ -3007,21 +3008,48 @@ function handleCadastreQuery(query) {
     const s = C.getCadastralSummary();
     response = "<b>Complete Cadastral Summary</b><pre style='white-space:pre-wrap;margin-top:6px;font-size:12px'>Parcel: " + s.parcel.survey + " (" + s.parcel.owner + ", " + s.parcel.area + " sq m)\nBuilding: " + s.building.name + " (" + s.building.year + ", " + s.totalFloors + "F, " + s.totalUnits + " units)\nSelected: F4 / U03 (Demo Owner, 2 BHK, 850 sq.ft.)\nElevation: +12.2m to +15.2m\n3D Volume: " + C.calcVolume("P-02", "B01", "F4", "U03").unitVolume + " m³\nULPIN: " + (s.ulpin || "N/A") + "\nTopology: " + s.topology.score + "% · Conflicts: " + s.ownershipConflicts.length + "\nUnderground: " + s.underground.length + " assets</pre>";
   } else {
-    /* Add-on (AI general-knowledge fallback): rule-based, defined in js/aiAssistant.js.
-       Runs ONLY when all cadastral branches above found no match, so the existing
-       CADASTRE engine behaviour is fully preserved. No real AI/LLM is involved. */
+    /* No cadastral branch matched. Try the rule-based general-knowledge
+       fallback first (defined in js/aiAssistant.js). If that also fails,
+       escalate to the live Gemini AI via the Supabase Edge Function. */
     const gk = (typeof answerGeneralQuestion === "function") ? answerGeneralQuestion(q) : null;
-    response = gk
-      ? gk
-      : "I can analyze your cadastral data. Try:\n• 'Analyze parcel 131/2'\n• 'How many floors does B01 have?'\n• 'What is the ULPIN of F4-U03?'\n• 'Show underground utilities'\n• 'Are there topology conflicts?'\n• 'What is the vertical volume?'\n• 'Find ownership conflicts'\n• 'Generate a cadastral summary'\nOr ask general knowledge, e.g. 'What is GIS?', 'What is ULPIN?', 'What is the capital of India?'";
+    if (gk) {
+      response = gk;
+    } else {
+      response = null;
+      needsAI = true;
+    }
   }
-  setTimeout(() => {
-    const aiMsg = document.createElement("div");
-    aiMsg.className = "ai-message";
-    aiMsg.innerHTML = "<div class='ai-message-content'>" + response + "</div>";
-    messagesContainer.appendChild(aiMsg);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  }, 400);
+
+  if (!needsAI) {
+    const finalResponse = response;
+    setTimeout(() => {
+      const aiMsg = document.createElement("div");
+      aiMsg.className = "ai-message";
+      aiMsg.innerHTML = "<div class='ai-message-content'>" + finalResponse + "</div>";
+      messagesContainer.appendChild(aiMsg);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 400);
+    return;
+  }
+
+  /* Live AI path: show a thinking indicator, then call Gemini. */
+  const aiMsg = document.createElement("div");
+  aiMsg.className = "ai-message";
+  aiMsg.innerHTML = "<div class='ai-message-content'>🤖 Consulting Gemini…</div>";
+  messagesContainer.appendChild(aiMsg);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  const helpText = "I can analyze your cadastral data. Try:\n• 'Analyze parcel 131/2'\n• 'How many floors does B01 have?'\n• 'What is the ULPIN of F4-U03?'\n• 'Show underground utilities'\n• 'Are there topology conflicts?'\n• 'What is the vertical volume?'\n• 'Find ownership conflicts'\n• 'Generate a cadastral summary'\nOr ask a natural-language question — I am connected to Google Gemini.";
+
+  try {
+    if (typeof callGeminiAI !== "function") throw new Error("AI bridge not loaded");
+    const answer = await callGeminiAI(query);
+    aiMsg.innerHTML = "<div class='ai-message-content'>" + answer + "</div>";
+  } catch (e) {
+    console.warn("[ULPIN AI] Gemini fallback:", e && e.message);
+    aiMsg.innerHTML = "<div class='ai-message-content'>" + helpText + "</div>";
+  }
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function init() {

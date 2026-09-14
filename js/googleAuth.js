@@ -21,6 +21,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ujV_J2ebtVQc9KFQLVO_tw_aZsAJDjs";
 /* ---------------------------------------------------------------- */
 
 let sbClient = null;            /* Supabase browser client */
+/* Expose the shared browser client so the AI assistant can call Supabase Edge Functions
+   (e.g. the Gemini chat proxy) without re-initialising. Returns null if unconfigured. */
+window.getSupabaseAIClient = function () { return sbClient; };
+
+
 let sbGoogleActive = false;     /* true while a Google/Supabase session is in use */
 let sbUser = null;              /* current Supabase Auth user (account panel) */
 
