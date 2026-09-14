@@ -571,6 +571,16 @@ function routeAIQuery(q) {
 function GK_isTimeSensitive(q) {
   return /(?:current|today|tonight|latest|news|weather|forecast|temperature|election|budget|prime minister of india|president of india|government of india|government scheme)\b/.test(q);
 }
+/* Detect open-ended questions that need reasoning, explanation or examples
+   rather than a short static definition. These intentionally do NOT match a
+   GK topic and instead fall through to the Gemini fallback. */
+function GK_isOpenEnded(q) {
+  if (q.length > 60) return true;
+  if (/(explain why|explain how|give (an?\s+|some |three |two )?examples?|give reasons|why does|how does|compare|difference between|versus|what are the reasons|describe in detail|elaborate on|tell me about|walk me through)/.test(q)) return true;
+  return false;
+}
+
+
 
 var GK_TOPICS = [
   {
@@ -678,19 +688,24 @@ function answerGeneralQuestion(raw) {
     }
   }
 
-  /* Topic / definition detection (reusable pattern). */
-  for (let i = 0; i < GK_TOPICS.length; i++) {
-    const t = GK_TOPICS[i];
-    if (t.re) {
-      if (t.re.test(q)) return t.name + ": " + t.text;
-    } else {
-      for (let k = 0; k < t.keys.length; k++) {
-        if (q.indexOf(t.keys[k]) !== -1) return t.name + ": " + t.text;
+  /* Topic / definition detection (reusable pattern).
+     Open-ended questions (long queries, or those asking for explanation,
+     reasoning, examples, comparison, etc.) are intentionally NOT answered by
+     a short static topic — they fall through to the Gemini fallback below. */
+  if (!GK_isOpenEnded(q)) {
+    for (let i = 0; i < GK_TOPICS.length; i++) {
+      const t = GK_TOPICS[i];
+      if (t.re) {
+        if (t.re.test(q)) return t.name + ": " + t.text;
+      } else {
+        for (let k = 0; k < t.keys.length; k++) {
+          if (q.indexOf(t.keys[k]) !== -1) return t.name + ": " + t.text;
+        }
       }
     }
   }
 
-  return null; /* not a general-knowledge question — keep the cadastral help menu */
+  return null; /* not a general-knowledge question — route to Gemini */
 }
 
 function handleAIQuery(query) {
