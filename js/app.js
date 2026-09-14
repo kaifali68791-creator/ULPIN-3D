@@ -121,7 +121,7 @@ const DEMO_ROLE_CREDENTIALS = {
    sign-in / "Skip to demo platform") keeps the original full demo access.
    This is UI-level demo gating, NOT real security. No backend exists. */
 const ADMIN_ONLY_VIEWS = ["users", "roles", "platform"];
-const VIEW_ONLY_BUTTON_IDS = ["btn-new-record", "btn-generate-ulpin", "btn-generate-vertical-ulpin", "btn-bulk-ulpin"];
+const VIEW_ONLY_BUTTON_IDS = ["btn-new-record", "btn-generate-vertical-ulpin", "btn-bulk-ulpin"];
 const ROLE_PERMISSIONS = {
   /* Admin — complete platform: every existing feature + administration */
   admin: {
@@ -675,7 +675,13 @@ function renderViewExtra(view) {
   if (view === "units") renderUnitsTable();
   if (view === "underground") renderUnderground();
   if (view === "air") renderAir();
-  if (view === "reports") { renderReportHistory(); renderAdminReports(); }
+  if (view === "reports") {
+    renderReportHistory();
+    renderAdminReports();
+    /* New (additive): Supabase is the cross-device source of truth — refresh
+       from it, then re-render with the shared list. */
+    refreshReportsFromSupabase(function (ok) { if (ok) { renderReportHistory(); renderAdminReports(); } });
+  }
 }
 
 /* ===================== DASHBOARD ===================== */
@@ -1812,6 +1818,15 @@ function currentReporterEmail() {
   try {
     if (state && state.email) return String(state.email);
     if (state && state.userEmail) return String(state.userEmail);
+    /* New (additive): prefer the real Supabase Auth session email (Google
+       sign-in) so reports carry the true reporter address. Falls back to the
+       existing demo role credentials table for demo sessions. */
+    const sb = getReportsSupabase();
+    if (sb && sb.auth && typeof sb.auth.session === "function") {
+      const sess = sb.auth.session();
+      const em = sess && sess.user && sess.user.email;
+      if (em) return String(em);
+    }
     const rk = currentRoleKey();
     const cred = rk && typeof DEMO_ROLE_CREDENTIALS === "object" ? DEMO_ROLE_CREDENTIALS[rk] : null;
     return cred && cred.email ? String(cred.email) : "";
@@ -1828,6 +1843,168 @@ function reportAttachmentText(r) {
   if (!r || !r.fileName) return "";
   const base = r.fileName + " (" + (r.fileType || "file") + ", " + fmtFileSize(r.fileSize) + ")";
   return reportHasStoredAttachment(r) ? base + " — stored locally, preview available" : base + " — Preview unavailable — metadata only";
+}
+
+/* New (additive): Supabase-backed cross-device persistence for reports.
+   The shared public.problem_reports table (see supabase/migrations/
+   20260914120000_create_problem_reports.sql) is the source of truth across
+   devices; localStorage stays as an instant cache / offline fallback only.
+   Every helper here is additive — no existing report function was renamed. */
+const REPORT_SUPABASE_TABLE = "problem_reports";
+const REPORT_MIGRATED_KEY = "ulpin3d_reports_migrated_v1";
+let reportsRefreshInFlight = false;
+let reportsSubmitInFlight = false;
+
+function getReportsSupabase() {
+  try {
+    if (typeof window.getSupabaseAIClient === "function") return window.getSupabaseAIClient();
+  } catch (e) {}
+  return null;
+}
+
+/* Map a Supabase row to the existing report record shape used by the UI. */
+function reportRowToRecord(row) {
+  if (!row || !row.id) return null;
+  const r = {
+    id: String(row.id),
+    category: row.category || "Other",
+    ulpin: row.ulpin || "",
+    description: row.description || "",
+    location: row.location || "",
+    fileName: row.file_name || "",
+    fileType: row.file_type || "",
+    fileSize: row.file_size == null ? 0 : Number(row.file_size),
+    status: normalizeReportStatus(row.status),
+    createdAt: row.created_at || new Date().toISOString(),
+    reporterRole: row.reporter_role || "",
+    reporterRoleName: row.reporter_role_name || "",
+    reporterEmail: row.reporter_email || "",
+    adminRemarks: row.admin_remarks || "",
+    statusUpdatedAt: row.status_updated_at || "",
+    remarksUpdatedAt: row.remarks_updated_at || "",
+    fromSupabase: true
+  };
+  if (row.attachment_data) r.attachmentData = row.attachment_data;
+  return r;
+}
+
+/* Map an existing report record to the Supabase row shape (snake_case).
+   user_id is intentionally omitted — the column defaults to auth.uid(), which
+   satisfies the RLS insert policy without handling any token in the frontend. */
+function reportRecordToRow(r) {
+  if (!r || !r.id) return null;
+  const row = {
+    id: String(r.id),
+    category: r.category || "Other",
+    ulpin: r.ulpin || null,
+    description: r.description || "",
+    location: r.location || null,
+    file_name: r.fileName || null,
+    file_type: r.fileType || null,
+    file_size: r.fileSize ? Number(r.fileSize) : null,
+    status: normalizeReportStatus(r.status),
+    created_at: r.createdAt || new Date().toISOString(),
+    reporter_role: r.reporterRole || null,
+    reporter_role_name: r.reporterRoleName || null,
+    reporter_email: r.reporterEmail || null,
+    admin_remarks: r.adminRemarks || ""
+  };
+  if (r.statusUpdatedAt) row.status_updated_at = r.statusUpdatedAt;
+  if (r.remarksUpdatedAt) row.remarks_updated_at = r.remarksUpdatedAt;
+  if (r.attachmentData) row.attachment_data = r.attachmentData;
+  return row;
+}
+
+/* Load reports from Supabase, merge them with the local cache (never losing
+   a local-only report) and re-render the reports views. Any failure keeps the
+   page working from the cache — the page never breaks. */
+function refreshReportsFromSupabase(done) {
+  const sb = getReportsSupabase();
+  if (!sb || reportsRefreshInFlight) { if (done) done(false); return; }
+  reportsRefreshInFlight = true;
+  sb.from(REPORT_SUPABASE_TABLE)
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(500)
+    .then(function (res) {
+      reportsRefreshInFlight = false;
+      if (res.error) {
+        console.warn("[Reports] Supabase load failed — using local cache:", res.error.message || res.error);
+        if (done) done(false);
+        return;
+      }
+      const remote = (res.data || []).map(reportRowToRecord).filter(Boolean);
+      const remoteIds = {};
+      remote.forEach(function (r) { remoteIds[r.id] = true; });
+      const localOnly = loadReports().filter(function (r) { return r && !remoteIds[r.id]; });
+      saveReports(remote.concat(localOnly));
+      migrateLocalReportsToSupabase(localOnly);
+      if (done) done(true);
+    })
+    .catch(function (e) {
+      reportsRefreshInFlight = false;
+      console.warn("[Reports] Supabase load error — using local cache:", e);
+      if (done) done(false);
+    });
+}
+
+/* One-time-safe import of reports that were saved only in this browser's
+   localStorage (previous behaviour). Marked in REPORT_MIGRATED_KEY so they are
+   never re-inserted after a successful upload. */
+function migrateLocalReportsToSupabase(localOnly) {
+  const sb = getReportsSupabase();
+  if (!sb || !localOnly || !localOnly.length) return;
+  let migrated = {};
+  try { migrated = JSON.parse(localStorage.getItem(REPORT_MIGRATED_KEY) || "{}") || {}; } catch (e) { migrated = {}; }
+  const rows = [];
+  localOnly.forEach(function (r) {
+    if (migrated[r.id]) return;
+    const row = reportRecordToRow(r);
+    if (row) rows.push(row);
+    migrated[r.id] = true;
+  });
+  if (!rows.length) return;
+  try { localStorage.setItem(REPORT_MIGRATED_KEY, JSON.stringify(migrated)); } catch (e2) {}
+  sb.from(REPORT_SUPABASE_TABLE).upsert(rows, { onConflict: "id", ignoreDuplicates: true })
+    .then(function (res) {
+      if (res.error) {
+        console.warn("[Reports] local report migration failed:", res.error.message || res.error);
+        try {
+          const retry = JSON.parse(localStorage.getItem(REPORT_MIGRATED_KEY) || "{}") || {};
+          rows.forEach(function (row) { delete retry[row.id]; });
+          localStorage.setItem(REPORT_MIGRATED_KEY, JSON.stringify(retry));
+        } catch (e3) {}
+      }
+    })
+    .catch(function (e) { console.warn("[Reports] local report migration error:", e); });
+}
+
+/* Push an admin field update (status / remarks) to Supabase. The local cache
+   is already updated by the caller; failures degrade to a clear warning. */
+function syncReportFieldsToSupabase(reportId, fields) {
+  const sb = getReportsSupabase();
+  if (!sb) { toast("Saved in this browser only — the server could not be reached.", "warn", 5000); return; }
+  sb.from(REPORT_SUPABASE_TABLE).update(fields).eq("id", String(reportId))
+    .then(function (res) {
+      if (res.error) {
+        console.warn("[Reports] Supabase update failed — kept locally:", res.error.message || res.error);
+        toast("Saved in this browser only — the server could not be updated.", "warn", 5000);
+      }
+    })
+    .catch(function () { toast("Saved in this browser only — the server could not be updated.", "warn", 5000); });
+}
+
+function deleteReportFromSupabase(reportId) {
+  const sb = getReportsSupabase();
+  if (!sb) { toast("Deleted in this browser only — the server could not be reached.", "warn", 5000); return; }
+  sb.from(REPORT_SUPABASE_TABLE).delete().eq("id", String(reportId))
+    .then(function (res) {
+      if (res.error) {
+        console.warn("[Reports] Supabase delete failed:", res.error.message || res.error);
+        toast("Deleted in this browser only — the server could not be updated.", "warn", 5000);
+      }
+    })
+    .catch(function () { toast("Deleted in this browser only — the server could not be updated.", "warn", 5000); });
 }
 
 function openReportForm(prefillUlpin) {
@@ -1919,14 +2096,27 @@ function finalizeReportSubmission(category, ulpin, desc, loc, fileName, fileType
     adminRemarks: ""
   };
   if (attachmentData) r.attachmentData = attachmentData;
+  /* New (additive): the shared Supabase table is the source of truth — insert
+     there first so Admin sees the report from any device; localStorage stays
+     as the instant cache / offline fallback. */
+  persistNewReport(r);
+}
+
+/* Renders the existing submission outcome UI and updates the local cache
+   (same as the previous localStorage-only flow). */
+function finishReportUi(r) {
   const list = loadReports();
-  list.unshift(r);
-  let ok = saveReports(list);
+  let replaced = false;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id === r.id) { list[i] = r; replaced = true; break; }
+  }
+  if (!replaced) list.unshift(r);
+  const ok = saveReports(list);
   if (!ok && r.attachmentData) {
     /* localStorage quota reached — keep the report, fall back to metadata-only. */
     try { delete r.attachmentData; } catch (e2) { r.attachmentData = undefined; }
-    ok = saveReports(list);
-    if (ok) toast("Attachment contents exceeded local storage — report saved as metadata only.", "info", 4200);
+    saveReports(list);
+    toast("Attachment contents exceeded local storage — report saved as metadata only.", "info", 4200);
   }
   const out = $("#report-outcome");
   if (out) {
@@ -1940,7 +2130,7 @@ function finalizeReportSubmission(category, ulpin, desc, loc, fileName, fileType
       '<div class="pd-item"><span>Date / time</span><b>' + new Date(r.createdAt).toLocaleString() + '</b></div>' +
       (r.fileName ? '<div class="pd-item"><span>Attachment</span><b>' + esc(reportAttachmentText(r)) + '</b></div>' : '') +
       '</div>' +
-      '<div style="margin-top:8px;font-size:11.5px;color:var(--muted)">Prototype Submission — not connected to a government grievance system. Saved locally in this browser only.</div>';
+      '<div style="margin-top:8px;font-size:11.5px;color:var(--muted)">Prototype Submission — not connected to a government grievance system. Saved to the ULPIN platform database and visible to Admin.</div>';
     mountIcons(out);
   }
   toast("Report submitted — Ticket " + esc(r.id), "ok", 4200);
@@ -1954,6 +2144,38 @@ function finalizeReportSubmission(category, ulpin, desc, loc, fileName, fileType
   if (info) info.textContent = "";
   renderReportHistory();
   renderAdminReports();
+}
+
+/* New (additive): insert the report into Supabase so it is visible from any
+   device. The unique ticket ID + ignoreDuplicates prevent duplicate rows on
+   retries/submits. If the server is unreachable the report is still cached
+   locally and automatically re-sent when the Reports page is next opened. */
+function persistNewReport(r) {
+  if (reportsSubmitInFlight) return;
+  reportsSubmitInFlight = true;
+  const sub = $("#btn-submit-report");
+  if (sub) sub.disabled = true;
+  const finish = function (serverSaved) {
+    reportsSubmitInFlight = false;
+    if (sub) sub.disabled = false;
+    finishReportUi(r);
+    if (!serverSaved) toast("Report saved in this browser only — the server could not be reached. It will be sent automatically when the Reports page is reopened.", "warn", 6500);
+  };
+  const sb = getReportsSupabase();
+  if (!sb) { finish(false); return; }
+  const row = reportRecordToRow(r);
+  if (!row) { finish(false); return; }
+  sb.from(REPORT_SUPABASE_TABLE)
+    .upsert([row], { onConflict: "id", ignoreDuplicates: true })
+    .then(function (res) {
+      if (res.error) {
+        console.warn("[Reports] Supabase insert failed — kept locally:", res.error.message || res.error);
+        finish(false);
+        return;
+      }
+      finish(true);
+    })
+    .catch(function (e) { console.warn("[Reports] Supabase insert error — kept locally:", e); finish(false); });
 }
 
 function wireReports() {
@@ -2113,6 +2335,8 @@ function updateReportStatus(reportId, newStatus) {
   r.status = st;
   r.statusUpdatedAt = new Date().toISOString();
   saveReports(list);
+  /* New (additive): persist the status change to Supabase (cross-device). */
+  syncReportFieldsToSupabase(reportId, { status: st, status_updated_at: r.statusUpdatedAt });
   renderAdminReports();
   renderReportHistory();
   if (reportAdminOpenId === reportId) openAdminReportDetail(reportId);
@@ -2126,6 +2350,8 @@ function updateReportRemarks(reportId, remarks) {
   r.adminRemarks = String(remarks || "").trim();
   r.remarksUpdatedAt = new Date().toISOString();
   saveReports(list);
+  /* New (additive): persist the remarks change to Supabase (cross-device). */
+  syncReportFieldsToSupabase(reportId, { admin_remarks: r.adminRemarks, remarks_updated_at: r.remarksUpdatedAt });
   renderReportHistory();
   toast(r.adminRemarks ? "Admin remarks saved for " + esc(reportId) + "." : "Admin remarks cleared for " + esc(reportId) + ".", "ok", 3000);
 }
@@ -2136,6 +2362,8 @@ function deleteReport(reportId) {
   const next = list.filter((r) => !(r && r.id === reportId));
   if (next.length === list.length) { toast("Report not found.", "warn"); return; }
   saveReports(next);
+  /* New (additive): delete from Supabase as well (cross-device). */
+  deleteReportFromSupabase(reportId);
   reportAdminOpenId = null;
   const det = $("#admin-report-detail");
   if (det) det.innerHTML = "";
