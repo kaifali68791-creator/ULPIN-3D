@@ -159,6 +159,8 @@ const PARCEL_FILL = { Residential: "#38bdf8", Agricultural: "#4ade80", Commercia
 let lmap = null;
 let propsLayer = null;
 let parcelsLayer = null;
+let undergroundLayer = null;
+let surveyLayer = null;
 const parcelPolygons = {};   // parcel id -> L.Polygon
 const propMarkers = {};      // property id -> L.Marker
 let selBld = null;           // currently selected building footprint polygon
@@ -238,6 +240,29 @@ function initLeafletMap(selected) {
       parcelPolygons[p.id] = poly;
     });
 
+
+    /* Underground infrastructure + Survey data layers (demo) */
+    undergroundLayer = L.layerGroup();
+    var demoCadastre = (typeof CADASTRE !== "undefined" && CADASTRE.DATASET && CADASTRE.DATASET.underground) ? CADASTRE.DATASET.underground : [];
+    var demoParcelLat = (typeof CADASTRE !== "undefined" && CADASTRE.DATASET && CADASTRE.DATASET.parcel) ? CADASTRE.DATASET.parcel.lat : 18.5456;
+    var demoParcelLng = (typeof CADASTRE !== "undefined" && CADASTRE.DATASET && CADASTRE.DATASET.parcel) ? CADASTRE.DATASET.parcel.lng : 73.8234;
+    if (demoCadastre.length > 0) {
+      var offsets = [[0.00012, 0.0001], [-0.0001, 0.00014], [0.00016, -0.00008], [-0.00014, -0.00012], [0, 0.0002], [0.00008, -0.00018]];
+      demoCadastre.forEach(function(a, i) {
+        var off = offsets[i % offsets.length];
+        var m = L.marker([demoParcelLat + off[0], demoParcelLng + off[1]], {
+          icon: L.divIcon({ className: "", html: "<div class='undg-pin'></div>", iconSize: [14, 14], iconAnchor: [7, 7] })
+        });
+        m.bindPopup("<b>" + (a.type || "Underground Asset") + "</b><br>ID: " + (a.id || "â€”") + "<br>Authority: " + (a.authority || "â€”") + "<br>Depth: " + (a.depth != null ? a.depth + " m" : "â€”") + "<br>Status: " + (a.status || "â€”"));
+        m.addTo(undergroundLayer);
+      });
+    }
+    surveyLayer = L.layerGroup();
+    PARCELS.forEach(function(p) {
+      var mk = L.circleMarker([p.pts[0].lat, p.pts[0].lng], { radius: 5, color: "#1e3a5f", fillColor: "#fbbf24", fillOpacity: 0.9, weight: 1.5 });
+      mk.bindPopup("<b>Survey " + esc(p.survey) + "</b><br>Owner: " + esc(p.owner) + "<br>Use: " + esc(p.use) + "<br>Area: " + fmtArea(p.area) + " sq.m");
+      mk.addTo(surveyLayer);
+    });
     /* India-wide building-footprint discovery (zoom-dependent) */
     BLD.renderer = L.canvas({ padding: 0.3 });
     BLD.layer = L.layerGroup().addTo(lmap);
@@ -510,18 +535,39 @@ function wireLayerPanel() {
     state.buildingsEnabled = bld.checked;
     updateBuildingDiscovery();
   });
-  [undg, surv].forEach((cb) => {
-    if (cb) cb.addEventListener("change", () => {
-      cb.checked = false;
-      toast("<b>" + cb.labels[0].textContent.trim() + "</b> layer arrives in Phase 2 (needs backend data).", "info", 3200);
-    });
+  if (undg) undg.addEventListener("change", () => {
+    if (!undergroundLayer) return;
+    if (undg.checked) {
+      undergroundLayer.addTo(lmap);
+      if (undergroundLayer.getLayers().length < 1) toast("No underground dataset loaded — connect a backend to plot assets.", "info", 3200);
+    } else {
+      lmap.removeLayer(undergroundLayer);
+    }
+  });
+  if (surv) surv.addEventListener("change", () => {
+    if (!surveyLayer) return;
+    if (surv.checked) {
+      surveyLayer.addTo(lmap);
+      toast("Survey Data layer shown — " + PARCELS.length + " sample survey points.", "info", 2400);
+    } else {
+      lmap.removeLayer(surveyLayer);
+    }
   });
 }
 
 /* ---------- Header seg buttons (Parcels / Underground) ---------- */
 function setMapSegLayer(layer) {
   if (!lmap) return;
-  if (layer === "underground") toast("Underground infrastructure is a Phase 2 layer — not drawn on the live map yet.", "info", 3200);
+  if (layer === "underground") {
+    if (!undergroundLayer) return;
+    var cb = document.getElementById("layer-underground");
+    if (cb && !cb.checked) {
+      cb.checked = true;
+      undergroundLayer.addTo(lmap);
+      if (undergroundLayer.getLayers().length < 1) toast("No underground dataset loaded — connect a backend to plot assets.", "info", 3200);
+      else toast("Underground Infrastructure layer shown.", "info", 2400);
+    }
+  }
 }
 
 /* ---------- Lightweight local search (no geocoding service) ---------- */
@@ -558,10 +604,30 @@ function addMapControls() {
       L.DomEvent.on(a, "click", (e) => {
         L.DomEvent.preventDefault(e);
         if (!navigator.geolocation) return toast("Geolocation is not available in this browser.", "err");
-        navigator.geolocation.getCurrentPosition(
-          (pos) => lmap.flyTo([pos.coords.latitude, pos.coords.longitude], 15, { duration: 1 }),
-          () => toast("Location permission denied — sample markers stay visible.", "info")
-        );
+        let watchId = null;
+        const accuracyCircle = null;
+        const onSuccess = (pos) => {
+          const lat = pos.coords.latitude, lng = pos.coords.longitude;
+          const acc = pos.coords.accuracy || 0;
+          if (window._locateMarker) lmap.removeLayer(window._locateMarker);
+          if (window._locateAccCircle) lmap.removeLayer(window._locateAccCircle);
+          window._locateMarker = L.marker([lat, lng], {
+            icon: L.divIcon({ className: "", html: "<div class='locate-pin'></div>", iconSize: [18, 18], iconAnchor: [9, 9] })
+          }).addTo(lmap);
+          window._locateAccCircle = L.circle([lat, lng], { radius: acc, color: "#2563eb", weight: 1, fillColor: "#2563eb", fillOpacity: 0.12 }).addTo(lmap);
+          const zoom = acc < 50 ? 17 : acc < 200 ? 15 : 13;
+          lmap.flyTo([lat, lng], zoom, { duration: 1 });
+          if (acc > 500) toast("Location accuracy is low (~" + Math.round(acc) + " m). Try moving to an open area.", "info", 3500);
+        };
+        const onError = (err) => {
+          const msg = err.code === 1 ? "Location permission denied — sample markers stay visible."
+            : err.code === 2 ? "Location unavailable — sample markers stay visible."
+            : "Location request timed out — sample markers stay visible.";
+          toast(msg, "info");
+        };
+        navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+        watchId = navigator.geolocation.watchPosition(onSuccess, onError, { enableHighAccuracy: true, timeout: 0, maximumAge: 0 });
+        setTimeout(() => { if (watchId != null) navigator.geolocation.clearWatch(watchId); }, 30000);
       });
       return div;
     }

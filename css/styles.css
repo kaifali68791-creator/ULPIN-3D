@@ -944,6 +944,11 @@ body.nav-open .sidebar{transform:translateX(0)}
   100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}
 }
 
+/* Current-location marker + accuracy circle */
+.locate-pin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,#2563eb 30%,#1d4ed8 31%,#1d4ed8 60%,transparent 61%);box-shadow:0 0 0 2px rgba(37,99,235,.3)}
+/* Underground asset markers */
+.undg-pin{width:14px;height:14px;border-radius:2px;background:linear-gradient(135deg,#0d9488,#0f766e);border:1px solid #115e59;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
 /* ===================== INDIA-WIDE BUILDING DISCOVERY UI ===================== */
 #view-map[data-mode="3d"] .bld-status{display:none}
 .bld-status{
