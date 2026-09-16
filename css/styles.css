@@ -4534,3 +4534,77 @@ textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid #2563EB;outlin
 .bc.warn,.bc.pending{background:#FEF9C3;border-color:rgba(234,179,8,.45);color:#A16207}
 .bc.bad,.bc.err,.bc.rejected{background:#FEF2F2;border-color:rgba(220,38,38,.28);color:#DC2626}
 .bc.info,.bc.review{background:#DBEAFE;border-color:rgba(37,99,235,.3);color:#1D4ED8}
+/* ---------------------------------------------------------------------------
+
+   19 · ULPIN GENERATOR — OPENED DROPDOWN OPTION LIST (readability fix, additive)
+
+   Scope: ONLY the open option <option> list of the ULPIN Generator's
+   State (#ulp-state), District (#ulp-district), Sub-District/Tehsil (#ulp-tehsil)
+   and Village (#ulp-village) native selects.
+
+   Why: earlier rules `.select option{background:#0d1626;color:var(--ink)}`
+   (higher specificity than the light `select option` rule) plus
+   `.select{color-scheme:dark}` rendered the opened list dark-on-dark.
+
+   The closed select control itself is NOT changed — its own background,
+   border, text and arrow rules are left untouched.
+   --------------------------------------------------------------------------- */
+#ulp-state,#ulp-district,#ulp-tehsil,#ulp-village{color-scheme:light}
+#ulp-state option,#ulp-district option,#ulp-tehsil option,#ulp-village option{
+  background:#FFFFFF;color:#172033;
+}
+/* selected option — clear but subtle */
+#ulp-state option:checked,#ulp-district option:checked,
+#ulp-tehsil option:checked,#ulp-village option:checked{
+  background:#EFF6FF;color:#172033;font-weight:600;
+}
+/* keyboard focus / hover — subtle highlight, high contrast text */
+#ulp-state option:hover,#ulp-state option:focus,
+#ulp-district option:hover,#ulp-district option:focus,
+#ulp-tehsil option:hover,#ulp-tehsil option:focus,
+#ulp-village option:hover,#ulp-village option:focus{
+  background:#F1F5F9;color:#172033;
+}
+
+
+/* ---------------------------------------------------------------------------
+   20 · MOBILE MAP CONTROLS — compact ⋮ toggle for Layers + Nearby Places
+   Additive and mobile-only. Uses the project's existing phone breakpoint
+   (max-width:680px). Desktop/tablet (>680px) is completely unaffected: the
+   toggle is display:none and the Layers panel keeps its current behaviour.
+   The button reuses the EXISTING #map-layers-panel (which already contains
+   the layer checkboxes and the injected Nearby Places panel) — no controls
+   are duplicated or re-created, they are only collapsed/revealed.
+   --------------------------------------------------------------------------- */
+#map-ctrl-toggle{display:none}
+@media (max-width:680px){
+  /* compact floating 3-dot button — bottom-right of the map stage
+     (zoom / Locate / Fullscreen / GPS controls are top-left, legend bottom-left,
+     so nothing overlaps) */
+  #map-ctrl-toggle{
+    display:flex;align-items:center;justify-content:center;
+    position:absolute;right:10px;bottom:12px;z-index:1150;
+    width:38px;height:38px;padding:0;border-radius:11px;
+    background:rgba(255,255,255,.97);border:1px solid var(--line-2);
+    box-shadow:var(--shadow);color:var(--ink-2);
+    font-size:20px;line-height:1;cursor:pointer;
+    transition:border-color .15s,box-shadow .15s;
+  }
+  #map-ctrl-toggle:hover{border-color:#2563EB}
+  #map-ctrl-toggle:focus-visible{outline:none;border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.16)}
+  /* 3D mode already hides the layers panel, so hide the toggle there too */
+  #view-map[data-mode="3d"] #map-ctrl-toggle{display:none}
+  /* menu closed: the whole panel is collapsed — the map keeps nearly the
+     entire stage (search box, legend and Leaflet controls stay as they are) */
+  .map-layers-panel{display:none}
+  /* menu open: compact scrollable floating panel anchored above the toggle;
+     capped to the stage height so it never covers the full map and is never clipped */
+  .map-stage.map-ctrls-open .map-layers-panel{
+    display:flex;
+    top:auto;right:10px;bottom:58px;
+    width:min(250px,74vw);
+    max-height:min(430px,calc(100% - 72px));
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+}

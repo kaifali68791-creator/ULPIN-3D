@@ -1,0 +1,24 @@
+# ============================================================
+# ULPIN-3D — temporary / backup / debug artifacts only.
+# Application source files are NEVER ignored by this file.
+# ============================================================
+
+# backup copies made during feature work
+*.bak
+*.bak-*
+*.backup-*
+
+# CSS/debug dump scratch files
+*_dump*.txt
+css_dark*.txt
+dark-selectors.txt
+selmap.txt
+
+# one-off inspection / test scripts and logs
+_*.ps1
+_*.py
+_optest.txt
+server.log
+
+# Supabase CLI local link metadata
+supabase/.temp/

@@ -388,6 +388,9 @@
                 <span><i class="lg commercial"></i>Commercial</span>
                 <span><i class="lg institutional"></i>Institutional</span>
               </div>
+              <!-- Mobile-only compact toggle (hidden on desktop via CSS): collapses the
+                   Layers + Nearby Places panel behind a 3-dot button on phone screens -->
+              <button type="button" id="map-ctrl-toggle" class="map-ctrl-toggle" aria-label="Map controls" aria-haspopup="true" aria-expanded="false" aria-controls="map-layers-panel" title="Map controls">&#8942;</button>
             </div>
             <aside class="map-side" id="parcel-detail">
               <div class="pd-empty">
@@ -907,7 +910,7 @@
 <script src="js/geoService.js?v=1"></script>
 <script src="js/scene3d.js?v=1"></script>
 <script src="js/map.js?v=1"></script>
-<script src="js/mapLivePlus.js?v=2"></script>
+<script src="js/mapLivePlus.js?v=5"></script>
 <script src="js/mapGooglePlus.js?v=1"></script>
 <script src="js/aiAssistant.js?v=1"></script>
 <script src="js/cadastreEngine.js?v=1"></script>
@@ -961,6 +964,46 @@
     <!-- Populated when a property/parcel is selected -->
   </div>
 </div>
+
+<!-- ===================== MOBILE MAP CONTROLS (⋮ toggle) =====================
+     Minimal wiring for the phone-only 3-dot map-controls button. Toggles a
+     class on .map-stage; all controls inside #map-layers-panel (layer
+     checkboxes + Nearby Places panel) keep their existing event handlers. -->
+<script>
+(function () {
+  "use strict";
+  function init() {
+    var stage = document.querySelector(".map-stage");
+    var btn = document.getElementById("map-ctrl-toggle");
+    var panel = document.getElementById("map-layers-panel");
+    if (!stage || !btn || !panel) return;
+    function setOpen(open) {
+      var on = typeof open === "boolean" ? open : !stage.classList.contains("map-ctrls-open");
+      stage.classList.toggle("map-ctrls-open", on);
+      btn.setAttribute("aria-expanded", on ? "true" : "false");
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      setOpen();
+    });
+    /* outside tap/click close */
+    document.addEventListener("click", function (e) {
+      if (!stage.classList.contains("map-ctrls-open")) return;
+      if (panel.contains(e.target) || btn.contains(e.target)) return;
+      setOpen(false);
+    });
+    /* Escape close (keyboard accessibility) */
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && stage.classList.contains("map-ctrls-open")) {
+        setOpen(false);
+        btn.focus();
+      }
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
 
 </body>
 </html>
