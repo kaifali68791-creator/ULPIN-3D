@@ -1752,8 +1752,8 @@ body.nav-open .sidebar{transform:translateX(0)}
 }
 
 /* ===================== TEAM CYBERLEEKS MODAL ===================== */
-.team-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:13.5px;line-height:1.45;color:#dbe5f3}
-.team-list li::marker{color:#7dd3fc;font-weight:700}
+.team-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:13.5px;line-height:1.45;color:inherit}
+.team-list li::marker{color:var(--primary);font-weight:700}
 
 /* ===================== ACCOUNT PANEL (additive — topbar account dropdown) =====================
    Uses existing design tokens only; no existing rules are modified. */
@@ -3886,7 +3886,8 @@ body::before{
   background:#FFFFFF;border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.16);outline:none;
 }
 .input::placeholder,textarea::placeholder{color:#94A3B8}
-select option{background:#FFFFFF;color:#172033}
+select,.select{color-scheme:light}
+select option,.select option,select optgroup{background:#FFFFFF;color:#172033}
 input[type="checkbox"],input[type="radio"]{accent-color:#15803D}
 input[type="file"]{
   background:#FFFFFF;border:1px dashed #CBD5E1;color:#3D4A63;border-radius:10px;
