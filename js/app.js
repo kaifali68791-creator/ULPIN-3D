@@ -454,6 +454,607 @@ function renderAdminViews() {
   }
 }
 
+/* ---------- PHASE 4A - REAL USER MANAGEMENT, READ-ONLY (ADMIN ONLY) ----------
+   The first safe part of REAL User Management. Every row comes from the live
+   public.profiles table through the EXISTING authenticated Supabase session and
+   the EXISTING RLS policies (an admin may read every profile row; any other
+   signed-in account can only ever read its own row, and this section is not
+   offered to it at all).
+
+   STRICTLY READ-ONLY: no insert, no update, no delete, no upsert, no role
+   change, no status change, no RPC, no service-role key and no new permission
+   anywhere in this block. No mock/fake user is created and the list is never
+   hardcoded. Database role names are unchanged - admin | revenue_officer |
+   surveyor | citizen - and the frontend role keys stay admin / revenue / gis /
+   planning. */
+const ADMIN_USERS_TABLE = "profiles";
+const ADMIN_USERS_READ_COLUMNS = "id,email,full_name,role,status,last_seen_at,created_at";
+const ADMIN_USERS_ROWS_LIMIT = 500;
+/* Display grouping only - no database role name is renamed or added. */
+const ADMIN_USERS_STAFF_ROLE_KEYS = ["admin", "revenue_officer", "surveyor"];
+const ADMIN_USERS_ROLE_LABELS = {
+  admin: "Admin", revenue_officer: "Revenue Officer", surveyor: "Surveyor", citizen: "Citizen"
+};
+
+let adminUsersRows = null;    /* null = not loaded yet, [] = loaded and empty     */
+let adminUsersLoading = false;
+let adminUsersFailed = false;
+let adminUsersTab = "staff";  /* "staff" | "citizen"                              */
+let adminUsersQuery = "";
+let adminUsersRoleFilter = "";
+let adminUsersStatusFilter = "";
+let adminUsersControlsBound = false;
+
+/* Only the EXISTING admin role may use this section - the same guard the other
+   admin-only views already use. Its navigation entry is hidden for everyone
+   else by applyRoleNav(), and the card is hidden again here (defence in depth). */
+function canUseAdminUserManagement() { return currentRoleKey() === "admin"; }
+
+/* Reuses the EXISTING shared authenticated Supabase browser client (created in
+   js/googleAuth.js). No second client and no token handling in this file. */
+function getAdminUsersSupabase() {
+  try { return getReportsSupabase(); } catch (e) { return null; }
+}
+
+/* ---------- display helpers ---------- */
+function fmtAdminUsersLastSeen(iso) {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Never";
+  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+function fmtAdminUsersDate(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+function adminUsersStatusBadge(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "active") return '<span class="badge ok"><span class="dot teal"></span>Active</span>';
+  if (s === "suspended") return '<span class="badge danger"><span class="dot rose"></span>Suspended</span>';
+  if (!s) return '<span class="badge info"><span class="dot blue"></span>Unknown</span>';
+  return '<span class="badge info"><span class="dot blue"></span>' + esc(status) + "</span>";
+}
+function setAdminUsersStatus(msg, kind) {
+  const el = $("#um-status");
+  if (!el) return;
+  el.className = "um-status" + (kind ? " " + kind : "");
+  el.textContent = msg || "";
+}
+function syncAdminUsersVisibility() {
+  const card = $("#um-card");
+  if (card) card.style.display = canUseAdminUserManagement() ? "" : "none";
+}
+
+/* ---------- client-side tab / search / filters (read-only) ---------- */
+function adminUsersInTab(row) {
+  const role = String((row && row.role) || "");
+  return adminUsersTab === "staff"
+    ? ADMIN_USERS_STAFF_ROLE_KEYS.indexOf(role) !== -1
+    : role === "citizen";
+}
+function filteredAdminUsers() {
+  const q = adminUsersQuery.trim().toLowerCase();
+  return (adminUsersRows || []).filter(function (r) {
+    if (!adminUsersInTab(r)) return false;
+    if (adminUsersRoleFilter && String(r.role || "") !== adminUsersRoleFilter) return false;
+    if (adminUsersStatusFilter && String(r.status || "") !== adminUsersStatusFilter) return false;
+    if (!q) return true;
+    const nm = String(r.full_name || "").toLowerCase();
+    const mail = String(r.email || "").toLowerCase();
+    return nm.indexOf(q) !== -1 || mail.indexOf(q) !== -1;
+  });
+}
+
+/* ---------- rendering ---------- */
+function renderAdminUsersTable() {
+  const body = $("#um-table-body");
+  if (!body) return;
+  const rows = filteredAdminUsers();
+  const total = (adminUsersRows || []).length;
+  const count = $("#um-count");
+  if (count) {
+    count.textContent = adminUsersRows === null
+      ? ""
+      : rows.length + " of " + total + " accounts shown - " + (adminUsersTab === "staff" ? "Staff" : "Citizens");
+  }
+  if (!rows.length) {
+    let msg = adminUsersTab === "staff" ? "No staff accounts found." : "No citizen accounts found.";
+    if (adminUsersLoading) msg = "Loading registered accounts...";
+    else if (adminUsersFailed) msg = "The account directory could not be loaded. Use Refresh to try again.";
+    body.innerHTML = '<tr><td colspan="8" class="um-empty">' + esc(msg) + "</td></tr>";
+    return;
+  }
+  body.innerHTML = rows.map(function (r) {
+    const role = String(r.role || "");
+    return "<tr>" +
+      "<td><b>" + esc(r.full_name || "-") + "</b></td>" +
+      "<td>" + esc(r.email || "-") + "</td>" +
+      "<td>" + esc(ADMIN_USERS_ROLE_LABELS[role] || role || "-") + "</td>" +
+      "<td>" + adminUsersStatusBadge(r.status) + "</td>" +
+      /* PHASE 5: presence is derived ONLY from last_seen_at (UI indicator). */
+      "<td>" + adminUsersPresenceBadge(r) + "</td>" +
+      "<td>" + esc(fmtAdminUsersLastSeen(r.last_seen_at)) + "</td>" +
+      "<td>" + esc(fmtAdminUsersDate(r.created_at)) + "</td>" +
+      /* PHASE 6B: the ONLY status-changing control. It renders as a button that
+         calls the secure RPC - never a direct profiles UPDATE. */
+      "<td>" + adminUsersActionCell(r) + "</td>" +
+    "</tr>";
+  }).join("");
+}
+
+/* ---------- data access (SELECT only) ---------- */
+function refreshAdminUsers() {
+  if (!canUseAdminUserManagement()) { renderUserManagement(); return; }
+  if (adminUsersLoading) return;   /* one read at a time */
+  const sb = getAdminUsersSupabase();
+  if (!sb) {
+    adminUsersFailed = true;
+    setAdminUsersStatus("The account directory is unavailable in this session - please sign in again and use Refresh.", "err");
+    renderAdminUsersTable();
+    return;
+  }
+  adminUsersLoading = true;
+  adminUsersFailed = false;
+  setAdminUsersStatus("Loading registered accounts from the live database...");
+  renderAdminUsersTable();
+  sb.from(ADMIN_USERS_TABLE)
+    .select(ADMIN_USERS_READ_COLUMNS)
+    .order("created_at", { ascending: false })
+    .limit(ADMIN_USERS_ROWS_LIMIT)
+    .then(function (res) {
+      adminUsersLoading = false;
+      if (res && res.error) {
+        adminUsersFailed = true;
+        console.warn("[UserManagement] profiles read failed:", (res.error && res.error.message) || res.error);
+        setAdminUsersStatus("Registered accounts could not be loaded from the database. Use Refresh to try again.", "err");
+        renderAdminUsersTable();
+        return;
+      }
+      adminUsersRows = (res && res.data) ? res.data : [];
+      setAdminUsersStatus("");
+      renderAdminUsersTable();
+    })
+    .catch(function (e) {
+      adminUsersLoading = false;
+      adminUsersFailed = true;
+      console.warn("[UserManagement] profiles read error:", e);
+      setAdminUsersStatus("Registered accounts could not be loaded from the database. Use Refresh to try again.", "err");
+      renderAdminUsersTable();
+    });
+}
+
+/* ---------- view entry point (called from renderViewExtra) ---------- */
+function renderUserManagement() {
+  syncAdminUsersVisibility();
+  if (!canUseAdminUserManagement()) {
+    /* PHASE 5: a non-admin must never keep a live presence stream or timer. */
+    stopAdminUsersRealtime();
+    stopAdminUsersTick();
+    adminUsersRows = null;   /* never keep account data for a non-admin */
+    /* PHASE 6B: a non-admin must never keep action state either - and must
+       never see or trigger a Suspend/Restore control or RPC. */
+    adminUsersSelfId = null;
+    adminUsersBusyId = null;
+    adminUsersBusyAction = null;
+    setAdminUsersStatus("This directory is available to the platform administrator only.", "warn");
+    const body = $("#um-table-body"); if (body) body.innerHTML = "";
+    const count = $("#um-count"); if (count) count.textContent = "";
+    return;
+  }
+  bindAdminUsersControls();
+  /* PHASE 6B: resolve the signed-in admin's own profile id so the UI can hide
+     Suspend on their own row (backend protection remains authoritative). */
+  syncAdminUsersSelfId();
+  /* PHASE 5: real-time presence. Both calls are idempotent (never a duplicate
+     subscription / interval) and both degrade safely to the existing manual
+     Refresh when Supabase Realtime is unavailable. Neither one writes to the
+     database: the tick only re-derives Online/Offline from stored timestamps. */
+  bindAdminUsersSignOutCleanup();
+  startAdminUsersTick();
+  startAdminUsersRealtime();
+  if (adminUsersRows === null) refreshAdminUsers();
+  else renderAdminUsersTable();
+}
+
+/* One-time wiring of the existing UI controls (tabs / search / filters /
+   Refresh). These listeners only re-read the already-loaded list - no filter can
+   write to the database. */
+function bindAdminUsersControls() {
+  if (adminUsersControlsBound) return;
+  adminUsersControlsBound = true;
+  $$("#um-tabs .seg-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      adminUsersTab = btn.dataset.umTab === "citizen" ? "citizen" : "staff";
+      $$("#um-tabs .seg-btn").forEach(function (b) { b.classList.toggle("active", b === btn); });
+      renderAdminUsersTable();
+    });
+  });
+  const s = $("#um-search");
+  if (s) s.addEventListener("input", function () { adminUsersQuery = s.value || ""; renderAdminUsersTable(); });
+  const r = $("#um-role-filter");
+  if (r) r.addEventListener("change", function () { adminUsersRoleFilter = r.value || ""; renderAdminUsersTable(); });
+  const st = $("#um-status-filter");
+  if (st) st.addEventListener("change", function () { adminUsersStatusFilter = st.value || ""; renderAdminUsersTable(); });
+  const rf = $("#um-refresh");
+  if (rf) rf.addEventListener("click", function () { refreshAdminUsers(); });
+  /* PHASE 6B: ONE delegated listener for the row action buttons (Suspend /
+     Restore). Re-renders replace the buttons, but this single listener
+     survives them, so no per-row listener can ever accumulate. */
+  const tbb = $("#um-table-body");
+  if (tbb) tbb.addEventListener("click", function (ev) {
+    const btn = ev && ev.target && typeof ev.target.closest === "function"
+      ? ev.target.closest("[data-um-action]") : null;
+    if (!btn || btn.disabled) return;
+    adminUsersRunStatusAction(btn.getAttribute("data-um-id"), btn.getAttribute("data-um-action"));
+  });
+}
+/* ---------- PHASE 5 - REAL-TIME PRESENCE, DERIVED FROM last_seen_at ----------
+   Additive layer on top of the Phase 4A read-only User Management. It introduces
+   NO new heartbeat, NO new database write of any kind and NO new permission:
+
+   - Presence is a pure UI indicator DERIVED from the EXISTING last_seen_at value
+     written by the Phase 3B heartbeat in js/googleAuth.js. It is NOT an
+     authoritative authentication or security state and it never touches
+     profiles.status (Active / Suspended stay exactly what they were).
+   - The only Supabase Realtime topic used is public.profiles, UPDATE events.
+     No other table is subscribed to or exposed. Realtime is created ONLY for the
+     existing admin role and is cleaned up for anybody else, on sign-out and on
+     every teardown, so no duplicate subscription can accumulate.
+   - If Realtime is unavailable (library without .channel(), a failed
+     subscription, or the table not being part of the realtime publication), the
+     section keeps working exactly as before: manual Refresh, plus a local
+     in-memory tick that turns stale rows into Offline without any polling of the
+     database. Technical details are logged to the console only. */
+const ADMIN_USERS_ONLINE_WINDOW_MS = 120000;   /* Online = seen within the last 2 minutes */
+const ADMIN_USERS_TICK_MS = 30000;             /* local presence re-render only (no network) */
+const ADMIN_USERS_REALTIME_TOPIC = "um-profiles-presence";
+/* Local merge whitelist - the same readable columns as Phase 4A, minus the id. */
+const ADMIN_USERS_REALTIME_PATCH_COLUMNS = ["email", "full_name", "role", "status", "last_seen_at", "created_at"];
+
+let adminUsersRealtimeChannel = null;
+let adminUsersRealtimeStarting = false;
+let adminUsersRealtimeConnected = false;
+let adminUsersRealtimeNoteShown = false;
+let adminUsersRealtimeSeq = 0;
+let adminUsersTickTimer = null;
+let adminUsersTickCount = 0;
+let adminUsersSignOutBound = false;
+
+/* ---------- presence derivation (read-only, never a database write) ---------- */
+function adminUsersPresenceState(row, now) {
+  const iso = row && row.last_seen_at;
+  if (!iso) return "never";                       /* null timestamp -> Never */
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return "never";                   /* unusable value -> Never */
+  const ref = typeof now === "number" ? now : Date.now();
+  return (ref - t) <= ADMIN_USERS_ONLINE_WINDOW_MS ? "online" : "offline";
+}
+function adminUsersPresenceBadge(row, now) {
+  const state = adminUsersPresenceState(row, now);
+  if (state === "online") return '<span class="badge ok" title="Seen within the last 2 minutes"><span class="dot teal"></span>Online</span>';
+  if (state === "offline") return '<span class="badge um-mute" title="Last seen more than 2 minutes ago"><span class="dot gray"></span>Offline</span>';
+  return '<span class="badge um-never" title="No last-seen timestamp recorded yet"><span class="dot gray"></span>Never</span>';
+}
+
+/* ---------- local presence tick (ONE interval, never a second heartbeat) ----------
+   Re-renders Online/Offline from the timestamps already in memory, so a row
+   naturally becomes Offline after the threshold while the page stays open. It
+   performs no database write and no database read of its own: the only time it
+   re-queries is the bounded fallback below, and only while Realtime is down. */
+function adminUsersTick() {
+  try {
+    if (!canUseAdminUserManagement()) { stopAdminUsersRealtime(); stopAdminUsersTick(); return; }
+    const view = $("#view-users");
+    if (!view || !view.classList.contains("active")) return;   /* section not open */
+    adminUsersTickCount++;
+    const visible = (typeof document === "undefined") || document.visibilityState !== "hidden";
+    /* Fallback for the manual behaviour: at most one refresh per ~60 s, only when
+       Realtime is not connected and the tab is actually visible. */
+    if (!adminUsersRealtimeConnected && visible && (adminUsersTickCount % 2 === 0)) {
+      refreshAdminUsers();
+      return;
+    }
+    renderAdminUsersTable();
+  } catch (e) {
+    console.warn("[UserManagement] presence tick failed — the directory is unaffected:", (e && e.message) || e);
+  }
+}
+function startAdminUsersTick() {
+  if (adminUsersTickTimer !== null) return;      /* idempotent: one interval only */
+  if (typeof setInterval !== "function") return;
+  adminUsersTickTimer = setInterval(adminUsersTick, ADMIN_USERS_TICK_MS);
+}
+function stopAdminUsersTick() {
+  if (adminUsersTickTimer !== null) {
+    try { clearInterval(adminUsersTickTimer); } catch (e) {}
+    adminUsersTickTimer = null;
+  }
+  adminUsersTickCount = 0;
+}
+
+/* ---------- realtime merge (local list only) ---------- */
+function applyAdminUsersRealtimeRow(row) {
+  if (!row || !row.id || adminUsersRows === null) return;
+  if (!canUseAdminUserManagement()) return;
+  const id = String(row.id);
+  let idx = -1;
+  for (let i = 0; i < adminUsersRows.length; i++) {
+    if (String(adminUsersRows[i].id) === id) { idx = i; break; }
+  }
+  if (idx === -1) return;   /* unknown/new account -> picked up by Refresh; never invented */
+  const merged = Object.assign({}, adminUsersRows[idx]);
+  for (let k = 0; k < ADMIN_USERS_REALTIME_PATCH_COLUMNS.length; k++) {
+    const key = ADMIN_USERS_REALTIME_PATCH_COLUMNS[k];
+    if (Object.prototype.hasOwnProperty.call(row, key)) merged[key] = row[key];
+  }
+  adminUsersRows[idx] = merged;
+  renderAdminUsersTable();   /* update last_seen / presence without a page reload */
+}
+
+/* ---------- realtime lifecycle (single channel, always cleaned up) ---------- */
+function stopAdminUsersRealtime() {
+  const ch = adminUsersRealtimeChannel;
+  adminUsersRealtimeChannel = null;
+  adminUsersRealtimeStarting = false;
+  adminUsersRealtimeConnected = false;
+  if (!ch) return;
+  try {
+    const sb = getAdminUsersSupabase();
+    if (sb && typeof sb.removeChannel === "function") {
+      const p = sb.removeChannel(ch);
+      if (p && typeof p.catch === "function") p.catch(function () {});
+    } else if (typeof ch.unsubscribe === "function") {
+      ch.unsubscribe();
+    }
+  } catch (e) {
+    console.warn("[UserManagement] Realtime channel cleanup failed — the directory is unaffected:", (e && e.message) || e);
+  }
+}
+function startAdminUsersRealtime() {
+  try {
+    if (!canUseAdminUserManagement()) return;
+    if (adminUsersRealtimeChannel !== null || adminUsersRealtimeStarting) return;  /* no duplicates */
+    const sb = getAdminUsersSupabase();
+    if (!sb || typeof sb.channel !== "function") {
+      console.warn("[UserManagement] Supabase Realtime is unavailable in this session — falling back to the existing Refresh behaviour.");
+      adminUsersNoteRealtimeFallback();
+      return;
+    }
+    adminUsersRealtimeStarting = true;
+    adminUsersRealtimeSeq++;
+    const ch = sb.channel(ADMIN_USERS_REALTIME_TOPIC + "-" + adminUsersRealtimeSeq)
+      .on("postgres_changes",
+          { event: "UPDATE", schema: "public", table: ADMIN_USERS_TABLE },  /* only public.profiles */
+          function (payload) { applyAdminUsersRealtimeRow(payload && payload.new); });
+    adminUsersRealtimeChannel = ch;
+    ch.subscribe(function (status) {
+      adminUsersRealtimeStarting = false;
+      if (status === "SUBSCRIBED") {
+        adminUsersRealtimeConnected = true;
+        adminUsersRealtimeNoteShown = false;
+        console.log("[UserManagement] Realtime presence subscribed to public.profiles (UPDATE).");
+        return;
+      }
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        adminUsersRealtimeConnected = false;
+        console.warn("[UserManagement] Realtime subscription unavailable (" + status + ") — manual Refresh and automatic Offline ageing remain active.");
+        adminUsersNoteRealtimeFallback();
+      }
+    });
+  } catch (e) {
+    adminUsersRealtimeStarting = false;
+    adminUsersRealtimeConnected = false;
+    console.warn("[UserManagement] Could not start the Realtime subscription — the directory is unaffected:", (e && e.message) || e);
+    adminUsersNoteRealtimeFallback();
+  }
+}
+
+/* One neutral, non-technical line for the admin when the live stream is down.
+   It never overwrites a real loading / error message. */
+function adminUsersNoteRealtimeFallback() {
+  if (adminUsersRealtimeNoteShown) return;
+  const el = $("#um-status");
+  if (!el || String(el.textContent || "").trim()) return;
+  adminUsersRealtimeNoteShown = true;
+  setAdminUsersStatus("Live updates are unavailable in this session — use Refresh to update. Presence still switches to Offline automatically.", "warn");
+}
+
+/* Sign-out cleanup. Additive observer on the EXISTING client: it never changes
+   the OAuth / login flow and does nothing on sign-in. The teardown is deferred
+   so nothing runs inside the auth callback itself. */
+function bindAdminUsersSignOutCleanup() {
+  if (adminUsersSignOutBound) return;
+  const sb = getAdminUsersSupabase();
+  if (!sb || !sb.auth || typeof sb.auth.onAuthStateChange !== "function") return;
+  adminUsersSignOutBound = true;
+  try {
+    sb.auth.onAuthStateChange(function (event) {
+      if (event !== "SIGNED_OUT") return;
+      setTimeout(function () { stopAdminUsersRealtime(); stopAdminUsersTick(); }, 0);
+    });
+  } catch (e) {
+    adminUsersSignOutBound = false;
+    console.warn("[UserManagement] Could not register the sign-out cleanup — the directory is unaffected:", (e && e.message) || e);
+  }
+}
+
+/* ---------- PHASE 6B - ADMIN SUSPEND / RESTORE (RPC ONLY) ----------
+   The UI wiring for the already-live, security-tested database function
+   public.admin_set_profile_status(target_profile_id uuid, new_status text).
+
+   Hard rules of this block:
+   - The ONLY status-changing mechanism is sb.rpc("admin_set_profile_status",
+     { target_profile_id: <uuid>, new_status: "suspended" | "active" }).
+     There is NO .update() / .insert() / .upsert() / .delete() here and no
+     direct write to public.profiles from the browser.
+   - Controls exist ONLY inside the real admin User Management card and are
+     rendered only for an admin; a non-admin never sees them and can never
+     trigger the RPC (see renderUserManagement / canUseAdminUserManagement).
+   - Suspend is never shown for the signed-in admin's own profile. Backend
+     protection remains authoritative - the UI protection is only the first
+     layer (the function itself also refuses admin targets).
+   - The existing window.confirm() convention is reused; no new modal framework.
+   - One in-flight action at a time; the clicked button is disabled and shows
+     Suspending... / Restoring... until the RPC resolves.
+   - The existing Phase 5 realtime channel and presence tick are reused as-is:
+     no second subscription and no second heartbeat are created. After a
+     successful RPC the row is merged locally (instant feedback) and the
+     realtime UPDATE event for the same change merges the same values again -
+     idempotent by design. */
+const ADMIN_USERS_RPC_NAME = "admin_set_profile_status";
+const ADMIN_USERS_SUSPEND_STATUS = "suspended";
+const ADMIN_USERS_RESTORE_STATUS = "active";
+
+let adminUsersSelfId = null;      /* the signed-in admin's own profile id */
+let adminUsersBusyId = null;      /* profile id with an RPC in flight (or null) */
+let adminUsersBusyAction = null;  /* "suspend" | "restore" while in flight */
+
+/* Resolve the signed-in user's own id from the EXISTING authenticated client.
+   Failures are silent for the UI: if the id cannot be resolved, the backend
+   self/admin protection still makes suspension impossible. */
+function syncAdminUsersSelfId() {
+  const sb = getAdminUsersSupabase();
+  if (!sb || !sb.auth || typeof sb.auth.getUser !== "function") return;
+  try {
+    sb.auth.getUser().then(function (res) {
+      const uid = (res && res.data && res.data.user && res.data.user.id)
+        ? String(res.data.user.id) : null;
+      if (uid !== adminUsersSelfId) {
+        adminUsersSelfId = uid;
+        if (canUseAdminUserManagement()) renderAdminUsersTable();
+      }
+    }).catch(function () {});
+  } catch (e) {}
+}
+
+/* Map an RPC failure to one clear, non-technical line. The exact database
+   wording is kept in the console only. */
+function adminUsersFriendlyActionError(err) {
+  const msg = String((err && err.message) || err || "");
+  const code = String((err && err.code) || "");
+  if (code === "42501" || /permission denied/i.test(msg)) {
+    return "You do not have permission to change this account's status.";
+  }
+  if (code === "P0002" || /profile not found/i.test(msg)) {
+    return "This account could not be found. Use Refresh and try again.";
+  }
+  if (code === "22023" || /status must be/i.test(msg)) {
+    return "The requested status value is not allowed.";
+  }
+  if (code === "P0001" || /cannot be suspended/i.test(msg)) {
+    return "Administrator accounts cannot be suspended.";
+  }
+  if (/failed to fetch|networkerror|network error|timeout/i.test(msg)) {
+    return "Could not reach the server. Please try again.";
+  }
+  return "The account status could not be changed. Please try again.";
+}
+
+/* The Action cell for one profile row. Never shows Suspend for:
+   - a non-admin (the whole card is hidden for them), or
+   - the signed-in admin's own row. */
+function adminUsersActionCell(row) {
+  if (!canUseAdminUserManagement()) return "";
+  const id = row ? String(row.id || "") : "";
+  if (!id) return "";
+  if (adminUsersBusyId === id) {
+    const busyLabel = adminUsersBusyAction === "suspend" ? "Suspending..." : "Restoring...";
+    return '<button type="button" class="btn sm" disabled>' + busyLabel + "</button>";
+  }
+  const status = String((row && row.status) || "").toLowerCase();
+  if (status === ADMIN_USERS_SUSPEND_STATUS) {
+    return '<button type="button" class="btn sm um-restore" data-um-action="restore" data-um-id="' + esc(id) + '">Restore</button>';
+  }
+  if (status === ADMIN_USERS_RESTORE_STATUS) {
+    if (adminUsersSelfId && id === adminUsersSelfId) {
+      return '<span class="badge info"><span class="dot blue"></span>You</span>';
+    }
+    return '<button type="button" class="btn sm um-suspend" data-um-action="suspend" data-um-id="' + esc(id) + '">Suspend</button>';
+  }
+  return "";
+}
+
+/* The single status-changing path of the whole frontend. Everything funnels
+   through the secure RPC - never a direct profiles write. */
+function adminUsersRunStatusAction(profileId, action) {
+  if (!canUseAdminUserManagement()) return;
+  if (adminUsersBusyId) return;                 /* duplicate-click protection */
+  if (action !== "suspend" && action !== "restore") return;
+  const sb = getAdminUsersSupabase();
+  if (!sb || typeof sb.rpc !== "function") {
+    setAdminUsersStatus("The account directory is unavailable in this session - please sign in again.", "err");
+    return;
+  }
+  const id = String(profileId || "");
+  let row = null;
+  const all = adminUsersRows || [];
+  for (let i = 0; i < all.length; i++) {
+    if (String(all[i].id) === id) { row = all[i]; break; }
+  }
+  if (!row) {
+    setAdminUsersStatus("This account is no longer in the loaded list. Use Refresh and try again.", "warn");
+    return;
+  }
+  /* Defensive self-protection (the button is already hidden for the admin's
+     own row; this also covers programmatic calls). */
+  if (action === "suspend" && adminUsersSelfId && id === String(adminUsersSelfId)) {
+    setAdminUsersStatus("You cannot suspend your own administrator account.", "warn");
+    return;
+  }
+  const newStatus = action === "suspend" ? ADMIN_USERS_SUSPEND_STATUS : ADMIN_USERS_RESTORE_STATUS;
+  if (String(row.status || "").toLowerCase() === newStatus) {
+    renderAdminUsersTable();   /* nothing to do - keep the UI consistent */
+    return;
+  }
+  /* Confirmation reuses the project's existing window.confirm convention. */
+  const question = action === "suspend"
+    ? "Are you sure you want to suspend this user?"
+    : "Restore this user's access?";
+  if (!confirm(question)) return;
+
+  adminUsersBusyId = String(row.id);
+  adminUsersBusyAction = action;
+  setAdminUsersStatus(
+    (action === "suspend" ? "Suspending " : "Restoring ") +
+    (row.full_name || row.email || "user") + "...",
+    "warn"
+  );
+  renderAdminUsersTable();
+
+  sb.rpc(ADMIN_USERS_RPC_NAME, {
+    target_profile_id: row.id,
+    new_status: newStatus
+  }).then(function (res) {
+    adminUsersBusyId = null;
+    adminUsersBusyAction = null;
+    if (res && res.error) {
+      /* Never fake success: the local row keeps its previous status. */
+      console.warn("[UserManagement] status change refused by the database:", (res.error && res.error.message) || res.error);
+      setAdminUsersStatus(adminUsersFriendlyActionError(res.error), "err");
+      renderAdminUsersTable();
+      return;
+    }
+    /* Success: merge ONLY the status of this one row for instant feedback.
+       The existing realtime subscription receives the same UPDATE event and
+       merges the same values again (idempotent) - no second channel. */
+    const merged = Object.assign({}, row, { status: newStatus });
+    for (let i = 0; i < adminUsersRows.length; i++) {
+      if (String(adminUsersRows[i].id) === String(merged.id)) { adminUsersRows[i] = merged; break; }
+    }
+    setAdminUsersStatus("Account status updated.");
+    console.log("[UserManagement] " + ADMIN_USERS_RPC_NAME + " ok:", String(merged.id), "->", newStatus);
+    renderAdminUsersTable();
+  }).catch(function (e) {
+    adminUsersBusyId = null;
+    adminUsersBusyAction = null;
+    console.warn("[UserManagement] status change request failed:", (e && e.message) || e);
+    setAdminUsersStatus(adminUsersFriendlyActionError(e), "err");
+    renderAdminUsersTable();
+  });
+}
+
 /* ---------- GOOGLE-AUTH GATE FOR ROLE SIGN-IN (surgical auth fix) ----------
    Selecting a role and pressing "Sign in to dashboard" no longer grants
    access via the hard-coded demo credentials. The selected role is stored
@@ -669,6 +1270,8 @@ function goto(view, opts) {
 }
 
 function renderViewExtra(view) {
+  /* Phase 4A - live read-only User Management (admin only; the guard is inside). */
+  if (view === "users") renderUserManagement();
   if (view === "map") renderMap(state.selectedParcel || PARCELS[0]);
   if (view === "view3d") render3D();
   if (view === "parcels") renderParcelsTable();

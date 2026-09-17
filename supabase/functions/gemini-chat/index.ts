@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /* =====================================================================
    ULPIN 3D — Gemini AI Edge Function (FREE tier)
@@ -7,10 +8,19 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
    GEMINI_API_KEY Supabase secret — it is NEVER exposed to the browser.
    Model defaults to gemini-2.5-flash (free tier). Override with the
    GEMINI_MODEL secret if desired.
+   PHASE 6D: live verify_jwt=true already requires a valid Supabase JWT
+   at the gateway. This function additionally fails closed for suspended
+   accounts: caller identity comes ONLY from the verified JWT
+   (auth.getUser), status comes ONLY from the caller's own
+   public.profiles row under RLS (status must be 'active'). No
+   service_role, no body-supplied identity, no token logging.
    ===================================================================== */
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash";
+/* Standard Edge Function runtime configuration (names only). */
+const EDGE_SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const EDGE_SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const GEMINI_ENDPOINT =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
@@ -24,6 +34,18 @@ const CORS = {
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
+  }
+
+  /* PHASE 6D: require the user's JWT and an active account BEFORE any
+     Gemini work. Gateway verify_jwt=true already rejects missing/invalid
+     JWTs; this in-function guard resolves the verified caller and checks
+     suspension so a suspended session (still a valid JWT) fails closed. */
+  const gate = await requireActiveCaller(req);
+  if (!gate.ok) {
+    return new Response(
+      JSON.stringify({ error: gate.error }),
+      { status: gate.status, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
   }
 
   if (!GEMINI_API_KEY) {
@@ -71,6 +93,46 @@ serve(async (req) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* PHASE 6D — authenticated + active guard. Caller identity comes ONLY
+   from the verified JWT (auth.getUser); status comes ONLY from the
+   caller's own public.profiles row under RLS. User-scoped client only —
+   service_role is NEVER used. Tokens are never logged or returned. */
+async function requireActiveCaller(req: Request): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const authHeader = req.headers.get("authorization") || "";
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match || !match[1]) {
+    return { ok: false, status: 401, error: "Authentication required." };
+  }
+  if (!EDGE_SUPABASE_URL || !EDGE_SUPABASE_ANON_KEY) {
+    console.error("[gemini-chat] Edge runtime is missing Supabase configuration.");
+    return { ok: false, status: 500, error: "AI service is not configured." };
+  }
+  try {
+    const userClient = createClient(EDGE_SUPABASE_URL, EDGE_SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${match[1]}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await userClient.auth.getUser(match[1]);
+    const callerId = data && data.user ? data.user.id : null;
+    if (error || !callerId) {
+      return { ok: false, status: 401, error: "Authentication required." };
+    }
+    /* Own profile row only (RLS profiles_select_own permits this read).
+       No body-supplied identity is trusted. */
+    const { data: profile, error: profileError } = await userClient
+      .from("profiles")
+      .select("status")
+      .eq("id", callerId)
+      .maybeSingle();
+    if (profileError || !profile || profile.status !== "active") {
+      return { ok: false, status: 403, error: "Account is suspended." };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, status: 401, error: "Authentication required." };
+  }
+}
+
 async function callGemini(query: string, context: Record<string, unknown>): Promise<string> {
   const systemPrompt = buildSystemPrompt(context);
 

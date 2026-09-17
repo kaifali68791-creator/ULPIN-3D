@@ -69,6 +69,26 @@ img{max-width:100%}
 ::-webkit-scrollbar-thumb:hover{background:#33507a;background-clip:padding-box}
 ::-webkit-scrollbar-track{background:transparent}
 
+/* ============ PHASE 7: ACCOUNT ACCESS LOCK ============ */
+body.account-suspended{overflow:hidden}
+#suspended-lock{display:none;position:fixed;inset:0;z-index:2147483647;overflow:auto;overscroll-behavior:contain;padding:24px;background:#081323;color:#e9f0fb;align-items:center;justify-content:center}
+#suspended-lock.open:not([hidden]){display:flex}
+#suspended-lock[hidden]{display:none !important}
+#suspended-lock .suspended-card{width:100%;max-width:580px;margin:auto;background:#101e32;border:1px solid #2a405d;border-top:4px solid #fb7185;border-radius:var(--radius);padding:32px;box-shadow:var(--shadow-lg)}
+#suspended-lock .suspended-badge{display:inline-flex;align-items:center;gap:9px;color:#fda4af;font-size:12px;font-weight:700;letter-spacing:.04em;margin-bottom:16px}
+#suspended-lock .pulse{background:#fb7185;animation:none;box-shadow:none}
+#suspended-lock h2{font-size:25px;line-height:1.3;color:#f1f5fb;margin-bottom:16px}
+#suspended-lock .suspended-desc{color:#b4c4dd;line-height:1.7}
+#suspended-lock .suspended-email{padding:16px;margin:22px 0;background:#0a1627;border:1px solid #2a405d;border-radius:var(--radius-s)}
+#suspended-lock .suspended-email span{display:block;color:#91a6c2;font-size:12px;margin-bottom:5px}
+#suspended-lock .suspended-email strong{color:#e9f0fb;overflow-wrap:anywhere}
+#suspended-lock .suspended-actions{display:flex;flex-wrap:wrap;gap:12px}
+#suspended-lock .btn-ghost{color:#e9f0fb;border-color:#49627e;background:transparent}
+#suspended-lock .btn:focus-visible{outline:3px solid #7dd3fc;outline-offset:3px}
+#suspended-lock .btn:disabled{opacity:.65;cursor:wait}
+#suspended-lock .suspended-note{color:#91a6c2;font-size:12px;line-height:1.6;margin-top:20px}
+@media(max-width:520px){#suspended-lock{padding:16px}#suspended-lock .suspended-card{padding:24px}#suspended-lock h2{font-size:22px}}
+
 /* ============ APP LAYOUT ============ */
 .app{display:flex;min-height:100vh}
 .main{flex:1;min-width:0;margin-left:var(--sidebar-w);display:flex;flex-direction:column}
@@ -4608,3 +4628,35 @@ textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid #2563EB;outlin
     -webkit-overflow-scrolling:touch;
   }
 }
+/* ---------------------------------------------------------------------------
+   PHASE 4A - REAL USER MANAGEMENT (READ-ONLY, ADDITIVE)
+   Everything below is scoped to the new #um-card block inside the EXISTING
+   #view-users section. No existing selector, layout or mobile rule is changed.
+   --------------------------------------------------------------------------- */
+.um-status{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+.um-status.err{color:#B91C1C}
+.um-status.warn{color:#A16207}
+.um-empty{padding:16px 12px;font-size:12.5px;color:var(--muted);text-align:center}
+#um-card .toolbar{margin-bottom:12px}
+#um-card .toolbar .input{flex:1 1 220px;min-width:150px}
+#um-card .toolbar .select{flex:0 0 170px}
+
+/* ---------------------------------------------------------------------------
+   PHASE 5 - PRESENCE INDICATOR (additive, scoped to the existing #um-card)
+   Only two new neutral variants are added for the Offline / Never presence
+   states; the Online state reuses the existing .badge.ok + .dot.teal styles.
+   No existing selector, layout or mobile rule is changed.
+   --------------------------------------------------------------------------- */
+.badge.um-mute{background:#f1f5f9;color:#475569;box-shadow:inset 0 0 0 1px rgba(16,24,40,.06)}
+.badge.um-never{background:#f8fafc;color:#94a3b8;box-shadow:inset 0 0 0 1px rgba(16,24,40,.06)}
+
+/* ---------------------------------------------------------------------------
+   PHASE 6B - SUSPEND / RESTORE ACTIONS (additive, scoped to the #um-card)
+   Reuses the existing .btn.sm pattern; only two colour hints and a disabled
+   state are added, scoped to the User Management card. No existing rule,
+   layout or mobile rule is changed.
+   --------------------------------------------------------------------------- */
+#um-card .btn.sm{padding:4px 12px;font-size:11.5px;border-radius:8px}
+#um-card .btn.um-suspend{color:#B91C1C;background:#FEF2F2;box-shadow:inset 0 0 0 1px #FECACA}
+#um-card .btn.um-restore{color:#047857;background:#ECFDF5;box-shadow:inset 0 0 0 1px #A7F3D0}
+#um-card .btn.sm:disabled{opacity:.55;cursor:default}

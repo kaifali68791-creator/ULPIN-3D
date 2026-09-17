@@ -809,6 +809,48 @@
 
       <!-- ============ ADMIN: USER MANAGEMENT (Admin role only) ============ -->
       <section class="view" id="view-users">
+        <!-- ============ PHASE 4A - LIVE USER MANAGEMENT (READ-ONLY, ADMIN ONLY) ============
+             Real accounts read from public.profiles with the EXISTING authenticated
+             Supabase session and the EXISTING RLS policies. Strictly read-only: this
+             block contains no insert, update, delete or role/status change.
+             Shown/refreshed by renderUserManagement() in js/app.js, and hidden for
+             every non-admin role. -->
+        <div class="card" id="um-card">
+          <div class="card-head">
+            <div><h3>Registered accounts</h3><p class="sub">Live directory from <b>public.profiles</b> &mdash; read-only</p></div>
+            <span class="chip"><span class="dot teal"></span>Live database</span>
+          </div>
+          <div class="toolbar">
+            <div class="seg" id="um-tabs">
+              <button type="button" class="seg-btn active" data-um-tab="staff">Staff</button>
+              <button type="button" class="seg-btn" data-um-tab="citizen">Citizens</button>
+            </div>
+            <input type="search" id="um-search" class="input" placeholder="Search by name or email&hellip;" autocomplete="off" />
+            <select id="um-role-filter" class="select" aria-label="Filter by role">
+              <option value="">All roles</option>
+              <option value="admin">Admin</option>
+              <option value="revenue_officer">Revenue Officer</option>
+              <option value="surveyor">Surveyor</option>
+              <option value="citizen">Citizen</option>
+            </select>
+            <select id="um-status-filter" class="select" aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+            <button type="button" class="btn" id="um-refresh"><span class="ni-ico" data-i="trend"></span>Refresh</button>
+          </div>
+          <div id="um-status" class="um-status" role="status" aria-live="polite"></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Presence</th><th>Last seen</th><th>Registered</th><th>Action</th></tr>
+              </thead>
+              <tbody id="um-table-body"></tbody>
+            </table>
+          </div>
+          <div class="pg-bar"><span id="um-count"></span><span class="pg-dots">Status changes are admin-controlled.</span></div>
+        </div>
         <div class="card">
           <div class="card-head">
             <div><h3>User &amp; account directory</h3><p class="sub">Local application data — not connected to an external database</p></div>
@@ -915,8 +957,8 @@
 <script src="js/aiAssistant.js?v=1"></script>
 <script src="js/cadastreEngine.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/app.js?v=10"></script>
-<script src="js/googleAuth.js?v=8"></script>
+<script src="js/app.js?v=11"></script>
+<script src="js/googleAuth.js?v=9"></script>
 <script src="js/i18n.js?v=1"></script>
 
 <!-- ===================== AI ASSISTANT (Floating Widget) ===================== -->
@@ -962,6 +1004,24 @@
   </div>
   <div class="ai-context-content" id="ai-context-content">
     <!-- Populated when a property/parcel is selected -->
+  </div>
+</div>
+
+<!-- ===================== PHASE 7 — SUSPENDED ACCOUNT ACCESS LOCK =====================
+     Full-screen blocking layer. Hidden by default; shown ONLY when the
+     authenticated Google/Supabase user's public.profiles.status = 'suspended'.
+     The Supabase Auth session stays valid while this lock is visible. -->
+<div class="suspended-lock" id="suspended-lock" hidden aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="suspended-lock-title" aria-describedby="suspended-description">
+  <div class="suspended-card" role="document">
+    <div class="suspended-badge"><span class="pulse" aria-hidden="true"></span>Account suspended</div>
+    <h2 id="suspended-lock-title">This account is temporarily unavailable</h2>
+    <p class="suspended-desc" id="suspended-description">An administrator has temporarily suspended application access for this account. Your sign-in session has not been revoked. Once access is restored, you can continue without signing in again while this session remains valid. Contact your administrator if you believe this is a mistake.</p>
+    <div class="suspended-email"><span>Signed in as</span><strong id="suspended-email">—</strong></div>
+    <div class="suspended-actions">
+      <button class="btn btn-primary" id="btn-suspended-recheck" type="button">Check again</button>
+      <button class="btn btn-ghost" id="btn-suspended-signout" type="button">Sign out</button>
+    </div>
+    <p class="suspended-note" id="suspended-note">If an administrator restores the account, choose “Check again” — there is no need to sign in with Google again while this session is valid.</p>
   </div>
 </div>
 
